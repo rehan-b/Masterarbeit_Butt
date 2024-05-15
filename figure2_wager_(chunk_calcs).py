@@ -34,9 +34,9 @@ def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, see
         tree_model.fit(x_points[indices_list[b]].reshape(-1, 1), y_noisy[indices_list[b]])
         tree_predictions_b[b, :] = tree_model.predict(x_points.reshape(-1, 1))
 
-    return tree_predictions_b, indices_list, N_bi
+    return tree_predictions_b, N_bi
 
-def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=1000):
+def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=100):
     """Calculates the infinitesimal jackknife variance estimate."""
     n_bootstrap, n_data_points = N_bi.shape
     n_preds = tree_predictions_b.shape[1]
@@ -52,10 +52,10 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=1000):
         end = min(start + chunk_size, n_bootstrap)
         chunk_N_bi = N_bi[start:end]
         chunk_tree_predictions_b = tree_predictions_b[start:end]
-        cov_matrix += np.mean((chunk_N_bi[:, :, None] - N_star_mean) * 
-                              (chunk_tree_predictions_b[:, None, :] - T_N_star_mean), axis=0).astype(np.float32)
+        cov_matrix += np.sum((chunk_N_bi[:, :, None] - N_star_mean) * 
+                             (chunk_tree_predictions_b[:, None, :] - T_N_star_mean), axis=0).astype(np.float32)
 
-    cov_matrix /= (n_bootstrap // chunk_size)
+    cov_matrix /= n_bootstrap
 
     bias_correction = (n_data_points / n_bootstrap) * np.mean((tree_predictions_b - T_N_star_mean) ** 2, axis=0).astype(np.float32)
 
@@ -64,13 +64,14 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=1000):
 
     return bagged_inf_jackknife_est
 
+
 def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_index, seed):
     """Simulate bagging and calculate variance for a single run."""
     np.random.seed(seed + simulation_index)
     y_noisy = generate_data(x_points, y_true, noise_variance=0.25, seed=seed + simulation_index)
 
     # Perform bagging
-    tree_predictions_b, indices_list, N_bi = bagging_decision_trees(x_points, y_noisy, n_bootstrap, seed=seed + simulation_index)
+    tree_predictions_b, N_bi = bagging_decision_trees(x_points, y_noisy, n_bootstrap, seed=seed + simulation_index)
     bagged_predictions = tree_predictions_b.mean(axis=0)
 
     # Calculate infinitesimal jackknife variance
@@ -82,7 +83,7 @@ def main():
     """Main function to run the simulation and plotting."""
     # Simulation parameters
     n_data_points = 500
-    n_simulations = 1000
+    n_simulations = 1_000
     n_bootstrap = 10_000  # Keeping the original value
     seed = 63
     np.random.seed(seed)

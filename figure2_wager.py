@@ -34,7 +34,7 @@ def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, see
         tree_model.fit(x_points[indices_list[b]].reshape(-1, 1), y_noisy[indices_list[b]])
         tree_predictions_b[b, :] = tree_model.predict(x_points.reshape(-1, 1))
 
-    return tree_predictions_b, indices_list, N_bi
+    return tree_predictions_b, N_bi
 
 def inf_JK_bagged_variance(N_bi, tree_predictions_b):
     """Calculates the infinitesimal jackknife variance estimate."""
@@ -59,7 +59,7 @@ def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_inde
     y_noisy = generate_data(x_points, y_true, noise_variance=0.25, seed=seed + simulation_index)
 
     # Perform bagging
-    tree_predictions_b, indices_list, N_bi = bagging_decision_trees(x_points, y_noisy, n_bootstrap, seed=seed + simulation_index)
+    tree_predictions_b, N_bi = bagging_decision_trees(x_points, y_noisy, n_bootstrap, seed=seed + simulation_index)
     bagged_predictions = tree_predictions_b.mean(axis=0)
 
     # Calculate infinitesimal jackknife variance
