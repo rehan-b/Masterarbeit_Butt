@@ -72,7 +72,6 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=CHUNK_SIZE):
 
 def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_index, seed):
     """Simulate bagging and calculate variance for a single run."""
-    np.random.seed(seed + simulation_index)
     y_noisy = generate_data(x_points, y_true, noise_variance=NOISE_VARIANCE, seed=seed + simulation_index)
 
     # Perform bagging
@@ -87,11 +86,10 @@ def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_inde
 def main():
     """Main function to run the simulation and plotting."""
     # Simulation parameters
-    n_data_points = 500
-    n_simulations = 1_000
-    n_bootstrap = 500  # Adjust as needed
-    seed = 63
-    np.random.seed(seed)
+    n_data_points = 50
+    n_simulations = 1_00
+    n_bootstrap = 50  # Adjust as needed
+    seed = 62
 
     # Generate data
     x_points = np.linspace(0, 1, n_data_points, dtype=np.float32)
@@ -127,10 +125,15 @@ def main():
     plt.title('True Variance of Bagged Predictions Across Simulated Datasets')
     plt.xlabel('x')
     plt.ylabel('Variance')
+    plt.ylim(-0.02, 0.06)
+   
+    plt.text(0.05, 0.05, f"data_points = {n_data_points}\nsimulations = {n_simulations}\nbootstrap(B) = {n_bootstrap}", fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
     plt.legend()
-    
+    timex = time.ctime()[4:19]
+    timex = timex.replace(":", "_")
+    timex = timex.replace(" ", "_")
     # Save figure with name figure2_wager+ n_datapoints+ n_simulations + n_bootstrap + seed 
-    plt.savefig(f"figure2_wager_nx{n_data_points}_nsim{n_simulations}_nB{n_bootstrap}_seed{seed}.png")
+    plt.savefig(f"figure2_wager_seed{seed}_{timex}.png")
 
 if __name__ == '__main__':
     start_time = time.time()
