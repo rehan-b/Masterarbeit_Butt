@@ -129,11 +129,7 @@ def main():
    
     plt.text(0.05, 0.05, f"data_points = {n_data_points}\nsimulations = {n_simulations}\nbootstrap(B) = {n_bootstrap}", fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
     plt.legend()
-    timex = time.ctime()[4:19]
-    timex = timex.replace(":", "_")
-    timex = timex.replace(" ", "_")
-    # Save figure with name figure2_wager+ n_datapoints+ n_simulations + n_bootstrap + seed 
-    plt.savefig(f"figure2_wager_seed{seed}_{timex}.png")
+    plt.savefig(f"figure2_wager_seed_{seed}_nx{n_data_points}_nB{n_bootstrap}_{int(time.time())}.png")
 
 if __name__ == '__main__':
     start_time = time.time()
