@@ -149,9 +149,9 @@ main <- function() {
 }
 
 # Ensure variables are defined in the global environment
-n_data_points <- 300
-n_simulations <- 10
-n_bootstrap <- 300
+n_data_points <- 500
+n_simulations <- 1000
+n_bootstrap <- 500
 seed <- 62
 
 x_points <- seq(0, 1, length.out = n_data_points)
