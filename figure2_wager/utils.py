@@ -269,6 +269,7 @@ def save_results_png(
     plt.xlabel("x")
     plt.ylabel("Variance")
     plt.ylim(-0.02, 0.06)
+    plt.grid(True)  
 
     plt.text(
         0.05,
