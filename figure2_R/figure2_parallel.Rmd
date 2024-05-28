@@ -33,9 +33,9 @@ n <- 500
 new_data <- seq(0, 1, length.out = 500)
 seed <- 123
 
-B <- 500        # Paper: 10_000
-n_sim <- 100    # Paper: 1_000
-noise_var <- 2
+B <- 1000        # Paper: 10_000
+n_sim <- 1000    # Paper: 1_000
+noise_var <- .5
 
 # Set up parallel processing
 num_cores <- detectCores() - 1

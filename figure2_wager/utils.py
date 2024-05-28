@@ -290,6 +290,6 @@ def save_results_png(
     )
     plt.legend()
     plt.savefig(
-        f"figure2_wager/figures/figure2_wager_seed_{seed}_nx{n_data_points}_nB{B}_noise{noise_variance}.png"
+        f"figure2_wager/figures/figure2_nB{B}_nsim{n_simulations}_noise{noise_variance}.png"
     )
     #{int(time.time())}
