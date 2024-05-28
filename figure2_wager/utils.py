@@ -89,6 +89,7 @@ def generate_data(
     """Generates noisy data based on the true function."""
     np.random.seed(seed=seed)
     x = np.random.uniform(0, 1, n_data_points)
+    #x = np.linspace(0, 1, n_data_points)
     y_true = step_function(x)
     noise = np.random.normal(loc=0, scale=np.sqrt(noise_variance), size=n_data_points)
     return x , y_true, y_true + noise
@@ -278,7 +279,7 @@ def save_results_png(
     plt.title("True Variance of Bagged Predictions Across Simulated Datasets")
     plt.xlabel("x")
     plt.ylabel("Variance")
-    plt.ylim(-0.02, 0.25)
+    #plt.ylim(-0.02, 0.25)
     plt.grid(True)  
 
     plt.text(
