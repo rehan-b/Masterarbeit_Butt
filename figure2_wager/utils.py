@@ -89,6 +89,7 @@ def generate_data(
     """Generates noisy data based on the true function."""
     np.random.seed(seed=seed)
     x = np.random.uniform(0, 1, n_data_points)
+    #x = np.linspace(0, 1, n_data_points)
     y_true = step_function(x)
     noise = np.random.normal(loc=0, scale=np.sqrt(noise_variance), size=n_data_points)
     return x , y_true, y_true + noise
