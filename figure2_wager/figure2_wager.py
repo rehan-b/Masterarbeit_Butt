@@ -19,8 +19,9 @@ def main():
     # Constants
     MAX_LEAF_NODES = 5
     CHUNK_SIZE = 250
-    sampling_noise_variance = [0.25,0.5,round(np.sqrt(2),4), 2.0]
+    sampling_noise_variance = [.25] #[0.25,0.5,round(np.sqrt(2),4), 2.0]
     min_samples_leaf = 1       # default = 1
+    ijk = False
     
     for noise in sampling_noise_variance:
         sampling_noise = noise
@@ -51,7 +52,8 @@ def main():
                     noise_variance_for_y=sampling_noise,
                     max_leaf_nodes=MAX_LEAF_NODES,
                     chunk_size=CHUNK_SIZE,
-                    min_samples_leaf=min_samples_leaf
+                    min_samples_leaf=min_samples_leaf,
+                    ijk_calculation=ijk
                 )
                 for i in range(n_simulations)
             ]
