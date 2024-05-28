@@ -19,7 +19,7 @@ def main():
     # Constants
     MAX_LEAF_NODES = 5
     CHUNK_SIZE = 250
-    sampling_noise_variance = [0.25,0.5,round(np.sqrt(2),4), 2.0,4.0]
+    sampling_noise_variance = [0.25,0.5,round(np.sqrt(2),4), 2.0]
     min_samples_leaf = 1       # default = 1
     
     for noise in sampling_noise_variance:
@@ -28,7 +28,7 @@ def main():
         # Simulation parameters
         n_data_points = 500
         n_simulations = 1_000
-        B = 500
+        B = 1000
         seed = 62
 
         # Generate fixed data points for predictions

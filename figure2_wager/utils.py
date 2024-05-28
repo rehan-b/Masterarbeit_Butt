@@ -278,7 +278,7 @@ def save_results_png(
     plt.title("True Variance of Bagged Predictions Across Simulated Datasets")
     plt.xlabel("x")
     plt.ylabel("Variance")
-    plt.ylim(-0.02, 0.25)
+    #plt.ylim(-0.02, 0.25)
     plt.grid(True)  
 
     plt.text(
