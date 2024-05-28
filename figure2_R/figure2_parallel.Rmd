@@ -1,0 +1,89 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(rpart)
+library(foreach)
+library(doParallel)
+
+# theta function
+theta <- function(new_data, train_data_df) {
+  model <- rpart(y ~ x1, data = train_data_df,
+                 control = rpart.control(maxleafnodes = 5))
+  predict(model, newdata = data.frame(x1 = new_data))
+}
+
+# bootstrap function
+bootstrap <- function(indices, B, theta, df, new_data) {
+  thetastar <- matrix(NA, nrow = B, ncol = length(new_data))
+  for (b in 1:B) {
+    sample_indices <- sample(indices, replace = TRUE)
+    sample_df <- df[sample_indices, ]
+    thetastar[b, ] <- theta(new_data, sample_df)
+  }
+  return(list(thetastar = thetastar))
+}
+
+# Simulation parameters
+n <- 500
+new_data <- seq(0, 1, length.out = 500)
+seed <- 123
+
+B <- 500        # Paper: 10_000
+n_sim <- 100    # Paper: 1_000
+noise_var <- 2
+
+# Set up parallel processing
+num_cores <- detectCores() - 1
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Export necessary libraries and functions to the cluster
+clusterExport(cl, c("rpart", "theta", "bootstrap", "n", "B",
+                    "new_data", "seed", "noise_var"))
+clusterEvalQ(cl, {
+  library(rpart)
+})
+
+# Start Simulation
+start_time <- Sys.time()
+results <- foreach(sim = 1:n_sim, .combine = rbind,
+                   .packages = "rpart") %dopar% {
+  set.seed(seed + sim)
+
+  # Generate data
+  x1 <- runif(n, 0, 1)
+  e <- rnorm(n, 0, sqrt(noise_var))
+  y <- 0.7 * (x1 >= 0.35 & x1 < 0.45) + 0.7 * (x1 >= 0.55 & x1 < 0.65) + 
+    1.4 * (x1 >= 0.45 & x1 < 0.55) + e
+  df <- data.frame(x1, y)
+
+  #bootstrap and bagging
+  p <- bootstrap(1:n, B, theta, df, new_data)$thetastar
+  colMeans(p)
+}
+
+
+stopCluster(cl)
+end_time <- Sys.time()
+mean_values <- colMeans(results)
+var_values <- apply(results, 2, var)
+
+# plot
+filename <- paste("R_figure2_nB", B, "_nsim", n_sim, "_noise",
+                  noise_var, ".png", sep = "")
+png(filename = filename, width = 800, height = 400)
+plot(new_data, var_values)
+lines(new_data, var_values, col = "red")
+dev.off()
+
+# Output the execution time
+execution_time <- end_time - start_time
+cat("Execution time:\n", execution_time, "\n")
+```
+
+
