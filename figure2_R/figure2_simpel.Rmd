@@ -6,13 +6,12 @@ output: html_notebook
 
 
 ```{r}
-library(rpart)
+library(tree)
 
-# theta function
 theta <- function(new_data, train_data_df) {
-  model <- rpart(y ~ x1, data = train_data_df,
-                 control = rpart.control(maxleafnodes = 5))
-  predict(model, newdata = data.frame(x1 = new_data))
+  model <- tree(y ~ x1, data = train_data_df)
+  pruned_model <- prune.tree(model, best = 5)
+  predict(pruned_model, newdata = data.frame(x1 = new_data))
 }
 
 # bootstrap function
@@ -28,12 +27,12 @@ bootstrap <- function(indices, B, theta, df, new_data) {
 
 # Simulation parameters
 n <- 500
-new_data <- seq(0, 1, length.out = 500)
-seed <- 123
+new_data <- seq(0, 1, length.out = 250)
+seed <- 45
 
-B <- 500        # Paper: 10_000
-n_sim <- 100    # Paper: 1_000
-noise_var <- 2
+B <- 10000        # Paper: 10_000
+n_sim <- 1000    # Paper: 1_000
+noise_var <- .25
 
 
 # Start Simulation
@@ -55,13 +54,11 @@ for (sim in 1:n_sim) {
   bagged_preds[sim, ] <- colMeans(p)
 }
 
-
 mean_values <- colMeans(bagged_preds)
 var_values <- apply(bagged_preds, 2, var)
 
 # plot
-filename <- paste("R_figure2_simp_nB", B, "_nsim", n_sim, "_noise",
-                  noise_var, ".png", sep = "")
+filename <- paste("R_figure2_simp_nB", B, "_seed", seed, ".png", sep = "")
 png(filename = filename, width = 800, height = 400)
 plot(new_data, var_values)
 lines(new_data, var_values, col = "red")

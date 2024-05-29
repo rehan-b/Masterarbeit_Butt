@@ -31,12 +31,12 @@ bootstrap <- function(indices, B, theta, df, new_data) {
 
 # Simulation parameters
 n <- 500
-new_data <- seq(0, 1, length.out = 500)
-seed <- 123
+new_data <- seq(0, 1, length.out = 250)
+seed <- 45
 
 B <- 10000        # Paper: 10_000
 n_sim <- 1000    # Paper: 1_000
-noise_var <- .5
+noise_var <- .25
 
 # Set up parallel processing
 num_cores <- detectCores() -1
@@ -79,8 +79,7 @@ mean_values <- colMeans(results)
 var_values <- apply(results, 2, var)
 
 # Plot
-filename <- paste("R_figure2_nB", B, "_nsim", n_sim, "_noise",
-                  noise_var, ".png", sep = "")
+filename <- paste("R_figure2_nB", B, "_seed", seed, ".png", sep = "")
 png(filename = filename, width = 800, height = 400)
 plot(new_data, var_values)
 lines(new_data, var_values, col = "red")
