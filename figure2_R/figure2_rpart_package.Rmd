@@ -1,0 +1,250 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(rpart)
+library(foreach)
+library(doParallel)
+library(pbapply)
+library(ggplot2)
+
+####### Simulation parameters  ###########
+n <- 500
+new_data <- seq(0, 1, length.out = 500)
+seed <- 45
+
+B <- 10000        # Paper: 10_000
+n_sim <- 1000     # Paper: 1_000
+noise_var <- .25
+##########################################
+
+theta <- function(new_data, df) {
+  model <- tree(y ~ x1, data = df)
+  pruned_model <- prune.tree(model, best = 5)
+  predict(pruned_model, newdata = data.frame(x1 = new_data))
+}
+
+theta <- function(new_data, df) {
+  model <- rpart(y ~ x1, data = df,
+                 control = rpart.control(maxleafnodes = 5))
+  predict(model, newdata = data.frame(x1 = new_data))
+}
+
+sample_indices_and_nbi <- function(n, B) {
+  boot_indices <- matrix(sample(1:n, B * n, replace = TRUE), nrow = B)
+  boot_counts <- t(apply(boot_indices, 1,
+                         function(x) table(factor(x, levels = 1:n))))
+  return(list(boot_indices = boot_indices, boot_counts = boot_counts))
+}
+
+bootstrap <- function(n, B, df, new_data, sample_indices_and_nbi, theta) {
+  thetastar <- matrix(NA, nrow = B, ncol = length(new_data))
+  res           <- sample_indices_and_nbi(n, B)
+  boot_indices  <- res$boot_indices
+  nbi           <- res$boot_counts
+  for (b in 1:B) {
+    sample_df <- df[boot_indices[b,], ]
+    thetastar[b, ] <- theta(new_data, sample_df)
+  }
+  return(list(thetastar = thetastar, nbi = nbi))
+}
+
+inf_jk_bagged_variance <- function(n_bi, t_n_b) {
+  B <- nrow(n_bi)
+  n <- ncol(n_bi)
+  t_n_star_mean <- colMeans(t_n_b)
+
+  # Vectorized computation of the covariance matrix
+  n_bi_centered <- sweep(n_bi, 2, 1, FUN = "-")
+  t_n_b_centered <- sweep(t_n_b, 2, t_n_star_mean, FUN = "-")
+
+  cov_i <- (t(n_bi_centered) %*% t_n_b_centered) / (B - 1)
+  cov_vector <- colSums(cov_i^2)
+
+  # Bias correction
+  bias_correction <- (((n - 1) * B) / (B - 1)^2) * apply(t_n_b, 2, var)
+
+  # Estimate of Jackknife-Infenitesimal Variance for bagged learners
+  var_inf_jk_u <- cov_vector - bias_correction
+  return(var_inf_jk_u)
+}
+
+# Function to run a single simulation
+run_simulation <- function(sim) {
+  set.seed(seed + sim)
+
+  # Generate data with fixed x points
+  x1 <-  seq(0, 1, length.out = 500)
+  e <- rnorm(n, 0, sqrt(noise_var))
+  y <- 0.7 * (x1 >= 0.35 & x1 < 0.45) + 0.7 * (x1 >= 0.55 & x1 < 0.65) +
+    1.4 * (x1 >= 0.45 & x1 < 0.55) + e
+  df <- data.frame(x1, y)
+
+  # Bootstrap and bagging
+  res1 <- bootstrap(n, B, df, new_data, sample_indices_and_nbi, theta)
+  preds <- res1$thetastar
+  nbi <- res1$nbi
+
+  # Compute the Jackknife-Infenitesimal Variance for bagged learners
+  var <- inf_jk_bagged_variance(nbi, preds)
+
+  list(preds = colMeans(preds), ijk_var = var)
+}
+
+# Set up parallel processing
+num_cores <- detectCores() - 1
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Export necessary libraries and functions to the cluster
+clusterExport(cl, c("theta", "bootstrap", "n", "B", "new_data", "seed", 
+                    "noise_var", "run_simulation", "sample_indices_and_nbi",
+                    "inf_jk_bagged_variance"))
+clusterEvalQ(cl, {
+  library(tree)
+})
+
+# Start Simulation with progress bar
+start_time <- Sys.time()
+results <- pblapply(1:n_sim, function(sim) {
+  run_simulation(sim)
+}, cl = cl)
+stopCluster(cl)
+end_time <- Sys.time()
+
+# Extract results
+preds_list <- lapply(results, `[[`, "preds")
+ijk_var_list <- lapply(results, `[[`, "ijk_var")
+preds_df <- do.call(rbind, preds_list)
+ijk_var_df <- do.call(rbind, ijk_var_list)
+
+# Results for plotting
+true_var <- apply(preds_df, 2, var)
+ijk_var_mean <- colMeans(ijk_var_df)
+ijk_var_std <- apply(ijk_var_df, 2, sd)
+
+# DataFrame erstellen
+data <- data.frame(
+  true_var = true_var,
+  ijk_var_mean = ijk_var_mean,
+  ijk_var_std = ijk_var_std,
+  new_data = new_data
+)
+
+# ggplot erstellen speichern
+p <- ggplot(data, aes(x = new_data)) +
+  geom_line(aes(y = true_var, color = "True Var")) +
+  geom_line(aes(y = ijk_var_mean, color = "IJK Var Mean")) +
+  geom_ribbon(aes(ymin = ijk_var_mean - ijk_var_std,
+                  ymax = ijk_var_mean + ijk_var_std,
+                  fill = "+-1 Std of IJK"),alpha = 0.2) +
+  scale_fill_manual(name = "Legend", 
+                    values = c("+-1 Std of IJK" = "blue")) +
+  scale_color_manual(name = "Legend", 
+                     values = c("True Var" = "black",
+                                "IJK Var Mean" = "red")) +
+  labs(y = "Variance", x = "x", 
+       title = "Variance of Bagged-DecisionTree Predictions") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white", color = "white"),
+        plot.background = element_rect(fill = "white", color = "white"),
+        legend.background = element_rect(fill = "white", color = "white"))
+
+ggsave("figure2_fix_x_rpart_pack.png", plot = p,
+       width = 10, height = 6, dpi = 600)
+
+################################################################################
+################################################################################
+################################################################################
+
+# Function to run a single simulation
+run_simulation <- function(sim) {
+  set.seed(seed + sim)
+
+  # Generate data with new x points drawn from a uniform distribution
+  x1 <-  runif(n, min = 0, max = 1)
+  e <- rnorm(n, 0, sqrt(noise_var))
+  y <- 0.7 * (x1 >= 0.35 & x1 < 0.45) + 0.7 * (x1 >= 0.55 & x1 < 0.65) +
+    1.4 * (x1 >= 0.45 & x1 < 0.55) + e
+  df <- data.frame(x1, y)
+
+  # Bootstrap and bagging
+  res1 <- bootstrap(n, B, df, new_data, sample_indices_and_nbi, theta)
+  preds <- res1$thetastar
+  nbi <- res1$nbi
+
+  # Compute the Jackknife-Infenitesimal Variance for bagged learners
+  var <- inf_jk_bagged_variance(nbi, preds)
+
+  list(preds = colMeans(preds), ijk_var = var)
+}
+
+# Set up parallel processing
+num_cores <- detectCores() - 1
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Export necessary libraries and functions to the cluster
+clusterExport(cl, c("theta", "bootstrap", "n", "B", "new_data", "seed", 
+                    "noise_var", "run_simulation", "sample_indices_and_nbi",
+                    "inf_jk_bagged_variance"))
+clusterEvalQ(cl, {
+  library(tree)
+})
+
+# Start Simulation with progress bar
+start_time <- Sys.time()
+results <- pblapply(1:n_sim, function(sim) {
+  run_simulation(sim)
+}, cl = cl)
+stopCluster(cl)
+end_time <- Sys.time()
+
+# Extract results
+preds_list <- lapply(results, `[[`, "preds")
+ijk_var_list <- lapply(results, `[[`, "ijk_var")
+preds_df <- do.call(rbind, preds_list)
+ijk_var_df <- do.call(rbind, ijk_var_list)
+
+# Results for plotting
+true_var <- apply(preds_df, 2, var)
+ijk_var_mean <- colMeans(ijk_var_df)
+ijk_var_std <- apply(ijk_var_df, 2, sd)
+
+# DataFrame erstellen
+data <- data.frame(
+  true_var = true_var,
+  ijk_var_mean = ijk_var_mean,
+  ijk_var_std = ijk_var_std,
+  new_data = new_data
+)
+
+# ggplot erstellen speichern
+p <- ggplot(data, aes(x = new_data)) +
+  geom_line(aes(y = true_var, color = "True Var")) + 
+  geom_line(aes(y = ijk_var_mean, color = "IJK Var Mean")) +
+  geom_ribbon(aes(ymin = ijk_var_mean - ijk_var_std,
+                  ymax = ijk_var_mean + ijk_var_std,
+                  fill = "+-1 Std of IJK"), alpha = 0.2) +
+  scale_fill_manual(name = "Legend",
+                    values = c("+-1 Std of IJK" = "blue")) +
+  scale_color_manual(name = "Legend",
+                     values = c("True Var" = "black", "IJK Var Mean" = "red")) +
+  labs(y = "Variance", x = "x",
+       title = "Variance of Bagged-DecisionTree Predictions") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white", color = "white"),
+        plot.background = element_rect(fill = "white", color = "white"),
+        legend.background = element_rect(fill = "white", color = "white"))
+
+ggsave("figure2_new_x_rpart_pack.png", plot = p,
+       width = 10, height = 6, dpi = 600)
+```
+
+
+
+
+
+

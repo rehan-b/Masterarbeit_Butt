@@ -62,11 +62,11 @@ def save_results_png(
     plt.legend()
     if fixed_x_points:
         plt.savefig(
-            f"figure2_wager/figures/figure2_seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png"
+            f"figure2_wager/figure2_seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png"
         )
     else:
         plt.savefig(
-            f"figure2_wager/figures/figure2_seed{seed}_nB{B}_{dt_args.items()}.png"
+            f"figure2_wager/figure2_seed{seed}_nB{B}_{dt_args.items()}.png"
         )
     # {int(time.time())}
 
