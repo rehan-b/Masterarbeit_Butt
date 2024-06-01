@@ -12,12 +12,12 @@ def main():
         ####### Simulation parameters  ############################
         ijk             = True
         
-        n        = 50
-        n_sim    = 1_0
-        B        = 10_0  # Paper uses 10_000
+        n        = 500
+        n_sim    = 1_000
+        B        = 10_000  # Paper uses 10_000
         args     = {"max_leaf_nodes": 5}
         seed     = 45
-        new_data = np.linspace(0, 1, 250)
+        new_data = np.linspace(0, 1, 500)
         ###########################################################
         
         fix_x_points    = fix
