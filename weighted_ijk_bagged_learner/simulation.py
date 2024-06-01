@@ -9,18 +9,20 @@ from utils import simulate_bagging_and_variance, save_results_png, save_result_c
 def main():
     for fix in [True, False]:
 
-        ####### Simulation parameters  ############################
+        ############## Constants  ################################
+        CHUNK_SIZE      = 500
         ijk             = True
-        
-        n        = 50
-        n_sim    = 1_0
-        B        = 10_0  # Paper uses 10_000
+        fix_x_points    = fix
+
+        ####### Simulation parameters  ############################
+        n        = 500
+        n_sim    = 1_000
+        B        = 10_000  # Paper uses 10_000
         args     = {"max_leaf_nodes": 5}
         seed     = 45
         new_data = np.linspace(0, 1, 250)
         ###########################################################
-        
-        fix_x_points    = fix
+
         bagged_preds = np.zeros((n_sim, new_data.shape[0]))
         est_vars = np.zeros((n_sim, new_data.shape[0]))
 
@@ -36,6 +38,7 @@ def main():
                     dt_args=args,
                     fix_x_points=fix_x_points,
                     ijk_calculation=ijk,
+                    chunk_size=CHUNK_SIZE,
                 )
                 for i in range(n_sim)
             ]

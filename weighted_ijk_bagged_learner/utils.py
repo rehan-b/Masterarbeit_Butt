@@ -73,72 +73,77 @@ def save_results_png(
         # {int(time.time())}
 
 
-def inf_JK_bagged_variance(
-    N_bi: np.ndarray, T_N_b: np.ndarray
-) -> np.ndarray:
-    """
-    Calculate the Jackknife-Infinitesimal Variance for bagged learners.
-
-    Parameters:
-    - N_bi (numpy.ndarray): The input data matrix of shape (B, n_data_points).
-    - T_N_b (numpy.ndarray): The predictions matrix of shape (B, n_preds).
-
-    Returns:
-    - var_inf_JK_U (numpy.ndarray): The estimated Jackknife-Infinitesimal Variance for bagged learners.
-
-    """
-
-    B, n_data_points = N_bi.shape
-    n_preds = T_N_b.shape[1]
-    T_N_star_mean = np.mean(T_N_b, axis=0)
-
-    # Compute the covariance vector without explicitly creating a large covariance matrix
-    cov_vector = np.sum(
-        ((N_bi - 1).T @ (T_N_b - T_N_star_mean))**2, axis=0
-    ) / (B - 1)**2
-
-    # Bias correction
-    bias_correction = (((n_data_points - 1) * B) / (B - 1) ** 2) * np.var(T_N_b, axis=0, ddof=1)
-
-    # Estimate of Jackknife-Infinitesimal Variance for bagged learners
-    var_inf_JK_U = cov_vector - bias_correction
-
-    return var_inf_JK_U
-
-
-def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.ndarray:
+def inf_JK_bagged_variance(N_bi, T_N_b, weights):
     """
     Calculate the Jackknife-Infenitesimal Variance for bagged learners.
 
     Parameters:
-    - N_bi (numpy.ndarray): The input data matrix of shape (B, n_data_points).
+    - N_bi (numpy.ndarray): The input data matrix of shape (B, n).
     - T_N_b (numpy.ndarray): The predictions matrix of shape (B, n_preds).
+    - weights (numpy.ndarray): The weights of the data points for bootstrapping. 
+
+    Returns:
+    - var_inf_JK_U (numpy.ndarray): The estimated Jackknife-Infenitesimal Variance for bagged learners.
+    """
+
+    B, n = N_bi.shape
+    n_preds = T_N_b.shape[1]
+    T_N_star_mean = np.mean(T_N_b, axis=0)
+
+    # Initialize the covariance matrix
+    cov_i = np.zeros((n, n_preds))
+
+    # Calculate deviations once to avoid recalculations
+    N_bi_dev = N_bi - 1
+    T_N_b_dev = T_N_b - T_N_star_mean
+
+    # Fill the covariance matrix using vectorized operations
+    cov_i = (1 / weights[:, None]) * (N_bi_dev.T @ T_N_b_dev) / (B - 1)
+    cov_vector = np.sum(cov_i**2, axis=0) / n**2
+
+    # Bias correction
+    bias_correction = (B / (n * (B - 1) ** 2)) * np.var(T_N_b, axis=0, ddof=1) * np.sum((1 - weights) / weights)
+
+    # Estimate of Jackknife-Infenitesimal Variance for bagged learners
+    var_inf_JK_U = cov_vector - bias_correction
+    return var_inf_JK_U
+
+
+def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """
+    Calculate the Jackknife-Infenitesimal Variance for bagged learners.
+
+    Parameters:
+    - N_bi (numpy.ndarray): The input data matrix of shape (B, n).
+    - T_N_b (numpy.ndarray): The predictions matrix of shape (B, n_preds).
+    - weights (numpy.ndarray): The weights of the data points for bootstrapping. 
 
     Returns:
     - var_inf_JK_U (numpy.ndarray): The estimated Jackknife-Infenitesimal Variance for bagged learners.
 
     """
 
-    B, n_data_points = N_bi.shape
+    B, n = N_bi.shape
     n_preds = T_N_b.shape[1]
     T_N_star_mean = np.mean(T_N_b, axis=0)
 
     # Initialize the covariance matrix
-    cov_i = np.zeros((n_data_points, n_preds))
+    cov_i = np.zeros((n, n_preds))
 
     # Fill the covariance matrix
-    for i in range(n_data_points):
+    for i in range(n):
         for pred in range(n_preds):
 
-            cov_i[i, pred] = np.dot(
+            cov_i[i, pred] = (1/weights[i]) * np.dot(
                 (N_bi[:, i] - 1), (T_N_b[:, pred] - T_N_star_mean[pred])
             ) / (B - 1)
-    cov_vector = np.sum(cov_i**2, axis=0)
+    cov_vector = (1/n**2) * np.sum(cov_i**2, axis=0)
 
     # Bias correction
-    bias_correction = (((n_data_points - 1) * B) / (B - 1) ** 2) * np.var(
+    bias_correction = ( (B) / (n * (B - 1) ** 2) ) * np.var(
         T_N_b, axis=0, ddof=1
-    )
+    ) * np.sum((1 - weights) / weights)
+        
     # Estimate of Jackknife-Infenitesimal Variance for bagged learners
     var_inf_JK_U = cov_vector - bias_correction
     return var_inf_JK_U
@@ -266,6 +271,7 @@ def simulate_bagging_and_variance(
     simulation_index: int,
     seed: int,
     dt_args: Dict,
+    weights: np.ndarray ,
     noise_var_for_generating_data=0.25,
     fix_x_points=False,
     ijk_calculation=False,
@@ -280,10 +286,11 @@ def simulate_bagging_and_variance(
         simulation_index (int): Index of the simulation.
         seed (int): Seed for random number generation.
         dt_args (Dict): Dictionary of arguments for decision tree.
+        weights (np.ndarray): Weights for bootstrapping.
         noise_var_for_generating_data (float, optional): Variance of noise for generating data. Defaults to 0.25.
         fix_x_points (bool, optional): Whether to fix x points. Defaults to False.
         ijk_calculation (bool, optional): Whether to calculate infinitesimal jackknife variance. Defaults to False.
-
+        
     Returns:
         Tuple[np.ndarray, np.ndarray]: Tuple containing bagged predictions and estimated variances.
     """
@@ -313,7 +320,7 @@ def simulate_bagging_and_variance(
 
     if ijk_calculation:
         est_variances = inf_JK_bagged_variance(
-            N_bi=N_bi, T_N_b=tree_predictions_b
+            N_bi=N_bi, T_N_b=tree_predictions_b, weights= weights
         )
     else:
         est_variances = np.zeros(n)
