@@ -3,41 +3,34 @@ from typing import Tuple, Dict
 from sklearn.tree import DecisionTreeRegressor
 import matplotlib.pyplot as plt
 import time
+import pandas as pd
 
 
 def save_results_png(
     new_data: np.ndarray,
-    true_variances: np.ndarray,
-    est_variances_mean: np.ndarray,
-    est_variances_std: np.ndarray,
-    n_data_points: np.ndarray,
-    n_simulations: int,
-    B: int,
-    seed: int,
-    dt_args: Dict,
-    fixed_x_points: bool,
+    bagged_preds: np.ndarray,
+    est_vars: np.ndarray,
+    n_data_points: np.ndarray = None,
+    B: int = None,
+    seed: int = None,
+    dt_args: Dict = None,
+    fixed_x_points: bool = None,
+    show_only_plot: bool = False,
 ):
     """
-    Save the results plot as a PNG file.
-
-    Args:
-        new_data (array-like): The x-axis values to predict.
-        true_variances (array-like): The true variances.
-        est_variances_mean (array-like): The mean estimated variances.
-        est_variances_std (array-like): The standard deviation of estimated variances.
-        n_data_points (int): The number of data points.
-        n_simulations (int): The number of simulations.
-        B (int): The bootstrap value.
-        seed (int): The seed value.
-
-    Returns:
-        None
+    Save the results as a PNG file.
     """
+    n_simulations = bagged_preds.shape[0]
+
+    # Calculate true variance of bagged predictions
+    true_variances = bagged_preds.var(axis=0, ddof=1)
+    est_variances_mean = est_vars.mean(axis=0)
+    est_variances_std = est_vars.std(axis=0, ddof=1)
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
     plt.plot(new_data, true_variances, label="True Variance")
-    plt.plot(new_data, est_variances_mean, label="Mean Est. Variance")
+    plt.plot(new_data, est_variances_mean, label="Mean Est. Variance", alpha=0.6)
     plt.fill_between(
         new_data,
         est_variances_mean - est_variances_std,
@@ -52,23 +45,29 @@ def save_results_png(
     plt.ylim(-0.01, 0.06)
     plt.grid(True)
 
-    plt.text(
-        0.05,
-        0.04,
-        f"data_points = {n_data_points}\nsimulations = {n_simulations}\nbootstrap(B) = {B}\nfixed_x={fixed_x_points}",
-        fontsize=12,
-        bbox=dict(facecolor="white", alpha=0.5),
-    )
     plt.legend()
-    if fixed_x_points:
-        plt.savefig(
-            f"figure2_wager/figure2_seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png"
-        )
+
+    if show_only_plot:
+        plt.show()
     else:
-        plt.savefig(
-            f"figure2_wager/figure2_seed{seed}_nB{B}_{dt_args.items()}.png"
+        plt.text(
+            0.05,
+            0.04,
+            f"data_points = {n_data_points}\nsimulations = {n_simulations}\nbootstrap(B) = {B}\nfixed_x={fixed_x_points}",
+            fontsize=12,
+            bbox=dict(facecolor="white", alpha=0.5),
         )
-    # {int(time.time())}
+        if fixed_x_points:
+            plt.savefig(
+                f"figure2_wager/figures/figure2_seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png",
+                dpi=600,
+            )
+        else:
+            plt.savefig(
+                f"figure2_wager/figures/figure2_seed{seed}_nB{B}_{dt_args.items()}.png",
+                dpi=600,
+            )
+        # {int(time.time())}
 
 
 def inf_JK_bagged_variance(
@@ -331,3 +330,47 @@ def simulate_bagging_and_variance(
         est_variances = np.zeros(n)
 
     return bagged_predictions, est_variances
+
+
+def save_result_csv(fix_x_points, seed, B, args, bagged_preds, est_vars, new_data):
+
+    if fix_x_points:
+        name = f"figure2_wager/results/seed{seed}_nB{B}_fixed_x_{args.items()}"
+    else:
+        name = f"figure2_wager/results/seed{seed}_nB{B}_new_x_{args.items()}"
+
+    header = ["pred-x-points"] + new_data.tolist()
+    combined_data = np.hstack(
+        (
+            np.array([["sim" + str(x)] for x in range(1, bagged_preds.shape[0] + 1)]),
+            bagged_preds,
+        )
+    )
+    df = pd.DataFrame(combined_data)
+    df.columns = header
+    df.to_csv(name + "bagged_preds.csv", index=False, sep=";")
+
+    combined_data = np.hstack(
+        (
+            np.array([["sim" + str(x)] for x in range(1, bagged_preds.shape[0] + 1)]),
+            est_vars,
+        )
+    )
+    df = pd.DataFrame(combined_data)
+    df.columns = header
+    df.to_csv(name + "est_vars.csv", index=False, sep=";")
+
+
+def step_function(x):
+    y_true = np.piecewise(
+        x,
+        [
+            x < 0.35,
+            (x >= 0.35) & (x < 0.45),
+            (x >= 0.45) & (x < 0.55),
+            (x >= 0.55) & (x < 0.65),
+            x >= 0.65,
+        ],
+        [0.0, 0.7, 1.4, 0.7, 0.0],
+    )
+    return y_true
