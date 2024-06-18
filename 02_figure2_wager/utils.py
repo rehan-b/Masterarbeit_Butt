@@ -7,19 +7,19 @@ import os
 
 
 def inf_JK_bagged_variance(
-    N_bi: np.ndarray, T_N_b: np.ndarray, e: float = 0.0, weights: np.ndarray = None
+    N_bi: np.ndarray, T_N_b: np.ndarray
 ) -> np.ndarray:
 
     B, n = N_bi.shape
-    T_N_star_mean = np.mean(T_N_b, axis=0)
+    T_N_b_mean = np.mean(T_N_b, axis=0)
 
-    if weights is None:
-        cov_i = ((N_bi - 1).T @ (T_N_b - T_N_star_mean)) / B
-        cov_i_hoch2 = cov_i**2
-        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
-        bias_correction = ((n - 1)/ B) * np.var(T_N_b, axis=0)
-        
-        return biased_var_estimate, bias_correction
+    
+    cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i_hoch2 = cov_i**2
+    biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+    bias_correction = ((n - 1)/ B) * np.var(T_N_b, axis=0)
+    
+    return biased_var_estimate, bias_correction
 
 
 def save_results_png(
