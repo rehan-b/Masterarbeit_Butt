@@ -50,7 +50,7 @@ def inf_JK_bagged_variance_weighted(N_bi, T_N_b, weights, m):
     cov_i_hoch2 = cov_i**2
     biased_var_estimate = np.sum(cov_i_hoch2)
     
-    bias_correction = n/B * (m-1)/m * np.var(T_N_b_mean)
+    bias_correction = n/B * (m-1)/m * np.var(T_N_b)
     
     return biased_var_estimate, bias_correction
 
