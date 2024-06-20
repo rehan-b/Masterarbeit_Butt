@@ -46,7 +46,7 @@ def save_results_png(
     fixed_x_points: bool = True,
     show_only_plot: bool = False,
     show_only_unbiased: bool = True,
-    weights: bool = False,
+    m: bool = False,
 ):
 
     n_simulations = bagged_preds.shape[0]
@@ -92,11 +92,11 @@ def save_results_png(
 
     plt.legend()
 
-    if weights:
+    if m is not None:
         plt.text(
             0.0,
             0.2,
-            f"n_train = {int(n_data_points/2)}\nsims = {n_simulations}\nB = {B}",
+            f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
             fontsize=12,
             bbox=dict(facecolor="white", alpha=0.5),
         )
