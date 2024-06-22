@@ -47,6 +47,7 @@ def save_results_png(
     show_only_plot: bool = False,
     show_only_unbiased: bool = True,
     m: bool = False,
+    reduced: bool = False,
 ):
 
     n_simulations = bagged_preds.shape[0]
@@ -92,22 +93,31 @@ def save_results_png(
 
     plt.legend()
 
-    if m is not False:
+    if m is not False and reduced is False:
         plt.text(
             0.0,
-            0.2,
-            f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
+            0.25,
+            f"X_train_size = {n_data_points}\nn_weights_non_zero={m}\nsims = {n_simulations}\nB = {B}",
             fontsize=12,
             bbox=dict(facecolor="white", alpha=0.5),
         )
-    else: 
-        plt.text(
-            0.0,
-            0.2,
-            f"n_train = {n_data_points}\nsims = {n_simulations}\nB = {B}",
-            fontsize=12,
-            bbox=dict(facecolor="white", alpha=0.5),
-        )
+    else:
+        if reduced:
+            plt.text(
+                0.0,
+                0.25,
+                f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
+                fontsize=12,
+                bbox=dict(facecolor="white", alpha=0.5),
+            ) 
+        else:
+            plt.text(
+                0.0,
+                0.25,
+                f"n_train = {n_data_points}\nsims = {n_simulations}\nB = {B}",
+                fontsize=12,
+                bbox=dict(facecolor="white", alpha=0.5),
+            )
     
     
     
@@ -318,3 +328,4 @@ def step_function(x):
         [0.0, 0.7, 1.4, 0.7, 0.0],
     )
     return y_true
+
