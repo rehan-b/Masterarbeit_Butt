@@ -5,139 +5,33 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
-
-def inf_JK_bagged_variance(
-    N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray = None, m: int = None
-):
-    B, n = N_bi.shape
-    T_N_b_mean = np.mean(T_N_b, axis=0)
-
-    if weights is None:
-
-        cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
-        cov_i_hoch2 = cov_i**2
-        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
-
-        bias_correction = ((n - 1) / B) * np.var(T_N_b, axis=0)
-        return biased_var_estimate, bias_correction
-
-    else:
-
-        cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
-        cov_i_hoch2 = cov_i**2
-        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
-
-        bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
-
-        return biased_var_estimate, bias_correction
-
-
-def save_results_png(
-    new_data: np.ndarray,
-    bagged_preds: np.ndarray,
-    est_vars_biased: np.ndarray,
-    bias_correction: np.ndarray,
-    y_lim: Tuple[float, float] = [0, 0.3],
-    folder_name: str = "test_folder",
-    n_data_points: np.ndarray = None,
-    B: int = None,
-    seed: int = None,
-    dt_args: Dict = None,
-    fixed_x_points: bool = True,
-    show_only_plot: bool = False,
-    show_only_unbiased: bool = True,
-    m: bool = False,
-    reduced: bool = False,
-):
-
-    n_simulations = bagged_preds.shape[0]
-
-    true_std = bagged_preds.std(axis=0)
-
-    unbiased_std_estimate = (est_vars_biased - bias_correction) ** 0.5
-    unbiased_std_estimate_mean = unbiased_std_estimate.mean(axis=0)
-
-    biased_std_mean = (est_vars_biased**0.5).mean(axis=0)
-
-    lower_bound = unbiased_std_estimate_mean - unbiased_std_estimate.std(axis=0)
-    upper_bound = unbiased_std_estimate_mean + unbiased_std_estimate.std(axis=0)
-
-    # Plotting the results
-    plt.figure(figsize=(10, 6))
-    plt.plot(new_data, true_std, label="True std")
-    plt.plot(
-        new_data,
-        unbiased_std_estimate_mean,
-        label="Mean Est. std IJK_unbiased",
-        alpha=0.6,
+def step_function(x):
+    y_true = np.piecewise(
+        x,
+        [
+            x < 0.35,
+            (x >= 0.35) & (x < 0.45),
+            (x >= 0.45) & (x < 0.55),
+            (x >= 0.55) & (x < 0.65),
+            x >= 0.65,
+        ],
+        [0.0, 0.7, 1.4, 0.7, 0.0],
     )
-    if not show_only_unbiased:
-        plt.plot(new_data, biased_std_mean, label="Mean Est. std IJK-biased", alpha=0.4)
-    plt.fill_between(
-        new_data,
-        lower_bound,
-        upper_bound,
-        color="b",
-        alpha=0.2,
-        label="±1 std",
-    )
-    plt.title(
-        " bias-corrected infinitesimal jackknife estimate of std for bagged predictors"
-    )
-    plt.xlabel("x")
-    plt.ylabel("std")
+    return y_true
 
-    if y_lim is not None:
-        plt.ylim(y_lim)
-    plt.grid(True)
 
-    plt.legend()
+def generate_data(
+    x: np.ndarray, seed: int = None, noise_variance=0.25
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
-    if m is not False and reduced is False:
-        plt.text(
-            0.0,
-            0.25,
-            f"X_train_size = {n_data_points}\nn_weights_non_zero={m}\nsims = {n_simulations}\nB = {B}",
-            fontsize=12,
-            bbox=dict(facecolor="white", alpha=0.5),
-        )
-    else:
-        if reduced:
-            plt.text(
-                0.0,
-                0.25,
-                f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
-                fontsize=12,
-                bbox=dict(facecolor="white", alpha=0.5),
-            ) 
-        else:
-            plt.text(
-                0.0,
-                0.25,
-                f"n_train = {n_data_points}\nsims = {n_simulations}\nB = {B}",
-                fontsize=12,
-                bbox=dict(facecolor="white", alpha=0.5),
-            )
-    
-    
-    
-    if show_only_plot:
-        plt.show()
+    rng = np.random.default_rng(seed)
+    n_x = x.shape[0]
 
-    else:
-        directory_path = "./figures/" + folder_name
-        os.makedirs(directory_path, exist_ok=True)
+    noise = rng.normal(loc=0, scale=np.sqrt(noise_variance), size=n_x)
+    y_true = step_function(x)
+    y_noisy = y_true + noise
 
-        if fixed_x_points:
-            plt.savefig(
-                f"{directory_path}/seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png",
-                dpi=600,
-            )
-        else:
-            plt.savefig(
-                f"{directory_path}/seed{seed}_nB{B}_new_x_{dt_args.items()}.png",
-                dpi=600,
-            )
+    return x, y_true, y_noisy
 
 
 def create_bootstrap_indices_and_Nbi(
@@ -158,20 +52,6 @@ def create_bootstrap_indices_and_Nbi(
             lambda x: np.bincount(x, minlength=n), axis=1, arr=boot_indices
         )
         return boot_indices, boot_counts
-
-
-def generate_data(
-    x: np.ndarray, seed: int = None, noise_variance=0.25
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
-    rng = np.random.default_rng(seed)
-    n_x = x.shape[0]
-
-    noise = rng.normal(loc=0, scale=np.sqrt(noise_variance), size=n_x)
-    y_true = step_function(x)
-    y_noisy = y_true + noise
-
-    return x, y_true, y_noisy
 
 
 def bagging_decision_trees(
@@ -200,6 +80,32 @@ def bagging_decision_trees(
         tree_predictions_b[b] = tree_model.predict(new_data_reshaped)
 
     return tree_predictions_b, N_bi
+
+
+def inf_JK_bagged_variance(
+    N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray = None, m: int = None
+):
+    B, n = N_bi.shape
+    T_N_b_mean = np.mean(T_N_b, axis=0)
+
+    if weights is None:
+
+        cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
+        cov_i_hoch2 = cov_i**2
+        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+
+        bias_correction = ((n - 1) / B) * np.var(T_N_b, axis=0)
+        return biased_var_estimate, bias_correction
+
+    else:
+
+        cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
+        cov_i_hoch2 = cov_i**2
+        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+
+        bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
+
+        return biased_var_estimate, bias_correction
 
 
 def simulate_bagging_and_variance(
@@ -315,17 +221,110 @@ def save_result_csv(
     ############################
 
 
-def step_function(x):
-    y_true = np.piecewise(
-        x,
-        [
-            x < 0.35,
-            (x >= 0.35) & (x < 0.45),
-            (x >= 0.45) & (x < 0.55),
-            (x >= 0.55) & (x < 0.65),
-            x >= 0.65,
-        ],
-        [0.0, 0.7, 1.4, 0.7, 0.0],
+def save_results_png(
+    new_data: np.ndarray,
+    bagged_preds: np.ndarray,
+    est_vars_biased: np.ndarray,
+    bias_correction: np.ndarray,
+    y_lim: Tuple[float, float] = [0, 0.3],
+    folder_name: str = "test_folder",
+    n_data_points: np.ndarray = None,
+    B: int = None,
+    seed: int = None,
+    dt_args: Dict = None,
+    fixed_x_points: bool = True,
+    show_only_plot: bool = False,
+    show_only_unbiased: bool = True,
+    m: bool = False,
+    reduced: bool = False,
+):
+
+    n_simulations = bagged_preds.shape[0]
+
+    true_std = bagged_preds.std(axis=0)
+
+    unbiased_std_estimate = (est_vars_biased - bias_correction) ** 0.5
+    unbiased_std_estimate_mean = unbiased_std_estimate.mean(axis=0)
+
+    biased_std_mean = (est_vars_biased**0.5).mean(axis=0)
+
+    lower_bound = unbiased_std_estimate_mean - unbiased_std_estimate.std(axis=0)
+    upper_bound = unbiased_std_estimate_mean + unbiased_std_estimate.std(axis=0)
+
+    # Plotting the results
+    plt.figure(figsize=(10, 6))
+    plt.plot(new_data, true_std, label="True std")
+    plt.plot(
+        new_data,
+        unbiased_std_estimate_mean,
+        label="Mean Est. std IJK_unbiased",
+        alpha=0.6,
     )
-    return y_true
+    if not show_only_unbiased:
+        plt.plot(new_data, biased_std_mean, label="Mean Est. std IJK-biased", alpha=0.4)
+    plt.fill_between(
+        new_data,
+        lower_bound,
+        upper_bound,
+        color="b",
+        alpha=0.2,
+        label="±1 std",
+    )
+    plt.title(
+        " bias-corrected infinitesimal jackknife estimate of std for bagged predictors"
+    )
+    plt.xlabel("x")
+    plt.ylabel("std")
+
+    if y_lim is not None:
+        plt.ylim(y_lim)
+    plt.grid(True)
+
+    plt.legend()
+
+    if m is not False and reduced is False:
+        plt.text(
+            0.0,
+            0.25,
+            f"X_train_size = {n_data_points}\nn_weights_non_zero={m}\nsims = {n_simulations}\nB = {B}",
+            fontsize=12,
+            bbox=dict(facecolor="white", alpha=0.5),
+        )
+    else:
+        if reduced:
+            plt.text(
+                0.0,
+                0.25,
+                f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
+                fontsize=12,
+                bbox=dict(facecolor="white", alpha=0.5),
+            ) 
+        else:
+            plt.text(
+                0.0,
+                0.25,
+                f"n_train = {n_data_points}\nsims = {n_simulations}\nB = {B}",
+                fontsize=12,
+                bbox=dict(facecolor="white", alpha=0.5),
+            )
+    
+    
+    
+    if show_only_plot:
+        plt.show()
+
+    else:
+        directory_path = "./figures/" + folder_name
+        os.makedirs(directory_path, exist_ok=True)
+
+        if fixed_x_points:
+            plt.savefig(
+                f"{directory_path}/seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png",
+                dpi=600,
+            )
+        else:
+            plt.savefig(
+                f"{directory_path}/seed{seed}_nB{B}_new_x_{dt_args.items()}.png",
+                dpi=600,
+            )
 
