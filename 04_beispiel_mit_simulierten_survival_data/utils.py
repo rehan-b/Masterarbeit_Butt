@@ -49,21 +49,21 @@ def create_surv_data(shape_weibull=1.5, scale_weibull_base=50, rate_censoring=0.
         'event': event_occurred.astype(int)
     })
     
+    print('Data shape:', data.shape)
     print(f'{(data["event"] ==1).sum()/n  * 100} % of the data has an event')
     
-    return data
-
-
-def censoring_before_t(t, data):
-    n = len(data)
-    censored_before_t = ((data['t'] <= t) & (data['event'] == 0)).sum()
-    relative_censored_before_t = censored_before_t / n
-    return relative_censored_before_t
+    return pd.DataFrame(data)
 
 
 ## Funktion zur Erstellung des neuen Datensatzes in abhängigkeit eines zeitpunktes t
 def create_new_dataset(data, t):
     new_data = data.copy()
-    new_data['event'] = ((data['t'] <= t) & (data['event'] == 1)).astype(int)
-    new_data['t'] = t
-    return new_data
+
+    new_data.loc[(data['t'] <= t) & (data['event'] == 1), 'survived'] = int(0)
+    new_data.loc[(data['t'] >= t) & (data['event'] == 0), 'survived'] = int(1)
+    new_data.loc[(data['t'] >= t) & (data['event'] == 1), 'survived'] = int(1)
+    new_data.loc[(data['t'] <= t) & (data['event'] == 0), 'survived'] = int(999)
+
+    new_data['survived'] = new_data['survived'].astype(int)
+
+    return pd.DataFrame(new_data)
