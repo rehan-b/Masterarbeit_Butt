@@ -1,0 +1,33 @@
+# 1 monat vorher krankmeldung einreichen Prüfungsamt
+# 05-18.08 frau jahn urlaub 
+
+# registerdatrem 5600 = n // 85 % tensierung 
+
+
+
+
+# zensierrate rumspielen ... %  an teil der zensierung  0.1 / 0.25 / 0.5
+# Fallzahll rumspielen
+
+
+# shape parameter 
+# zeitabhängige kovariate, da weibull modell(zur schätzun )  es schwierieger hat
+
+# logistic regression theroetische wahre varainz möglich 
+# vergleichen mit empirischer standardabweichung 
+
+# streuung von blanche schätzung varanzschätzer mit streuung von jackknife schätzer vergleichen
+
+# logistische regression / cox / xgb / random forest 
+
+# nachlesen random forest standardfehler schätzung 
+
+
+
+
+
+Fragen:
+
+- ipcw c index bei random forest , bzw. nach teilung des Datensatz bei tau ?
+- weibull modell kovariaten anpassen ?
+- weitere Metriken zur Evaluation ?
