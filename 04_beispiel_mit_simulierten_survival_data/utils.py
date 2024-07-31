@@ -78,53 +78,50 @@ def create_new_dataset_with_ipcw_weights(data: pd.DataFrame, t: np.float64, kmf:
 
 
 def train_test_split_into_df(df_train: pd.DataFrame, df_test: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray) -> pd.DataFrame:
-
+    # Reset index of train and test DataFrames
     df_train.reset_index(drop=True, inplace=True)
     df_test.reset_index(drop=True, inplace=True)
 
-    y_train_df = pd.DataFrame({'event': [event for event, time in y_train], 'time': [time for event, time in y_train]})
-    y_test_df = pd.DataFrame({'event': [event for event, time in y_test], 'time': [time for event, time in y_test]})
+    # Convert y_train and y_test to DataFrames
+    y_train_df = pd.DataFrame(y_train, columns=['event', 'time'])
+    y_test_df = pd.DataFrame(y_test, columns=['event', 'time'])
 
-    df_train.reset_index(drop=True, inplace=True)
-    df_test.reset_index(drop=True, inplace=True)
-
-    df_train['event'] = y_train_df['event']
-    df_train['time'] = y_train_df['time']
-    df_test['event'] = y_test_df['event']
-    df_test['time'] = y_test_df['time']
+    # Assign event and time columns to train and test DataFrames
+    df_train[['event', 'time']] = y_train_df[['event', 'time']]
+    df_test[['event', 'time']] = y_test_df[['event', 'time']]
 
     return df_train, df_test
 
-class BootstrapRandomForestClassifier(RandomForestClassifier):
-    def __init__(self, n_estimators=100, criterion="gini", max_depth=None,
-                 min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0.,
-                 max_features="auto", max_leaf_nodes=None, min_impurity_decrease=0.,
-                 bootstrap=True, oob_score=False, n_jobs=None, random_state=None, verbose=0,
-                 warm_start=False, class_weight=None, ccp_alpha=0.0, max_samples=None):
-        super().__init__(n_estimators=n_estimators, criterion=criterion, max_depth=max_depth,
-                         min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf,
-                         min_weight_fraction_leaf=min_weight_fraction_leaf, max_features=max_features,
-                         max_leaf_nodes=max_leaf_nodes, min_impurity_decrease=min_impurity_decrease,
-                         bootstrap=bootstrap, oob_score=oob_score, n_jobs=n_jobs, random_state=random_state,
-                         verbose=verbose, warm_start=warm_start, class_weight=class_weight, ccp_alpha=ccp_alpha,
-                         max_samples=max_samples)
-        self.tree_predictions_ = []
+def ipc_weighted_mse(y_true, y_pred, sample_weight):
+    return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
-    def fit(self, X, y, sample_weight=None):
-        if isinstance(X, pd.DataFrame):
-            self.feature_names_ = X.columns
-            X = X.values
-        if isinstance(y, pd.Series):
-            y = y.values
+def get_Nbi(lists):
+    arr = np.array(lists)
+    max_value = arr.max()
+    counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=max_value + 1), axis=1, arr=arr)
+    return counts
 
-        super().fit(X, y, sample_weight)
-        self._store_tree_predictions(X)
-        return self
+def inf_JK_bagged_variance(
+    N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray = None, m: int = None
+):
+    B, n = N_bi.shape
+    T_N_b_mean = np.mean(T_N_b, axis=0)
 
-    def _store_tree_predictions(self, X):
-        for estimator in self.estimators_:
-            self.tree_predictions_.append(estimator.predict_proba(X)[:, 1])
+    if weights is None:
 
-    def get_bootstrap_samples_and_predictions(self):
-        return [(indices, predictions) for indices, predictions in zip(self.estimators_samples_, self.tree_predictions_)]
+        cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
+        cov_i_hoch2 = cov_i**2
+        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
 
+        bias_correction = ((n - 1) / B) * np.var(T_N_b, axis=0)
+        return biased_var_estimate, bias_correction
+
+    else:
+
+        cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
+        cov_i_hoch2 = cov_i**2
+        biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+
+        bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
+
+        return biased_var_estimate, bias_correction
