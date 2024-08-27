@@ -226,7 +226,8 @@ def inf_JK_bagged_variance(
     return biased_var_estimate, bias_correction
 
 
-def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict  ):
+
+def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict, B_1: int   ):
 
     ########################################### Dataset Creation ############################################################################################
     data_generation_weibull_parameters['seed'] = seed
@@ -293,15 +294,58 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
     rf_std_pred_X_point = np.std(tnb)
 
-    # IJK Variance Estimation
+
+    ######################################## Variance Estimation ##########################################################################################
+
+    ### IJK Variance Estimation ###
     biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
                                                                     T_N_b=tnb,
                                                                     weights=df_train['weights_ipcw']  )
     ijk_var_pred_X_point = biased_var_estimate - bias_correction
 
-    del clf, tnb, biased_var_estimate, bias_correction, params_rf
+    ### Bootstrap Variance Estimation ###
+    n = df_train.shape[0]
+    rng = np.random.default_rng(seed)
+    first_level_boot_indices = rng.choice(np.arange(n), size=(B_1, n), replace=True)
+    preds = np.zeros(B_1)
+
+    clf = RandomForestClassifier(**params_rf)
+    for b in range(B_1):
+        ### cut data at tau // ipcw weights ###
+        kmf = KaplanMeierFitter()
+        df_train_ = df_train.iloc[first_level_boot_indices[b]]
+        kmf.fit(df_train_['time'], event_observed=1-df_train_['event'])
+        df_train_ = create_new_dataset_with_ipcw_weights(data=df_train_,t=tau, kmf=kmf)
+
+        clf.set_params(random_state=seed+b)
+        clf.fit(X=df_train_.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
+                y=df_train_['survived'], 
+                sample_weight=df_train_['weights_ipcw'])
+        preds[b] = clf.predict_proba(X_pred_point)[:, 1]
+        # Kein Löschen von 'clf' notwendig
+
+
+
+    bootstrap_std_pred_X_point = np.std(preds)
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    del  tnb, biased_var_estimate, bias_correction, params_rf
 
     return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train,\
            portion_events_after_cut_test, portion_censored_after_cut_test, portion_no_events_after_cut_test,\
-           wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point
+           wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point, bootstrap_std_pred_X_point
 
