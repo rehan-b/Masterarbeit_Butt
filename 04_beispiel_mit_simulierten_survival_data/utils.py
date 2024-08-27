@@ -226,7 +226,8 @@ def inf_JK_bagged_variance(
     return biased_var_estimate, bias_correction
 
 
-def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict, B_1: int   ):
+def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict, B_first_level: int ,
+               ijk_std_calc: bool, boot_std_calc: bool, train_models: bool ):
 
     ########################################### Dataset Creation ############################################################################################
     data_generation_weibull_parameters['seed'] = seed
@@ -242,47 +243,55 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     portion_events_after_cut_test = n_events_after_cut_test/df_test.shape[0]
     portion_no_events_after_cut_test = (1-n_events_after_cut_test/df_test.shape[0]-portion_censored_after_cut_test)
 
-    ############################################ Weibull Modell ############################################################################################
-    # Fitten des Weibull Modells
-    aft = WeibullAFTFitter()
-    aft.fit(df=df_train.drop(['weights_ipcw', 'survived'], axis=1), 
-            duration_col='time', 
-            event_col='event')
-    
-    # Evaluation auf Testdaten
-    y_pred = aft.predict_survival_function(df=df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1),
-                                           times = tau).iloc[0].tolist()
-    
-    wb_mse_ipcw = ipc_weighted_mse(y_true=df_test['survived'].values, 
-                                   y_pred=y_pred, 
-                                   sample_weight=df_test['weights_ipcw'])
-    
+    if train_models == True:
+        ############################################ Weibull Modell ############################################################################################
+        # Fitten des Weibull Modells
+        aft = WeibullAFTFitter()
+        aft.fit(df=df_train.drop(['weights_ipcw', 'survived'], axis=1), 
+                duration_col='time', 
+                event_col='event')
+        
+        # Evaluation auf Testdaten
+        y_pred = aft.predict_survival_function(df=df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1),
+                                            times = tau).iloc[0].tolist()
+        
+        wb_mse_ipcw = ipc_weighted_mse(y_true=df_test['survived'].values, 
+                                    y_pred=y_pred, 
+                                    sample_weight=df_test['weights_ipcw'])
+        
 
-    df_test2 = df_test.copy()
-    df_test2 = df_test2[df_test2['time']<=df_train['time'].max()]  
-    wb_cindex_ipcw, concordant, discordant, tied_risk, tied_time = concordance_index_ipcw(
-            survival_train = Surv.from_arrays(event=df_train['event'], time=df_train['time']),
-            survival_test  = Surv.from_arrays(event=df_test2['event'], time=df_test2['time']),
-            estimate       =  -aft.predict_expectation(df_test2) )
-    
-    # Prediction für X_erwartung
-    wb_y_pred_X_point = aft.predict_survival_function(df=X_pred_point, 
-                                                      times = tau).iloc[0].tolist()
+        df_test2 = df_test.copy()
+        df_test2 = df_test2[df_test2['time']<=df_train['time'].max()]  
+        wb_cindex_ipcw, concordant, discordant, tied_risk, tied_time = concordance_index_ipcw(
+                survival_train = Surv.from_arrays(event=df_train['event'], time=df_train['time']),
+                survival_test  = Surv.from_arrays(event=df_test2['event'], time=df_test2['time']),
+                estimate       =  -aft.predict_expectation(df_test2) )
+        
+        # Prediction für X_erwartung
+        wb_y_pred_X_point = aft.predict_survival_function(df=X_pred_point, 
+                                                        times = tau).iloc[0].tolist()
 
 
-    ######################################### Random Forest Modell #########################################################################################
-    # Fitten des Random Forest Modells
-    params_rf['random_state'] = seed
-    clf = RandomForestClassifier(**params_rf)
-    clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
-                y=df_train['survived'], 
-                sample_weight=df_train['weights_ipcw']  )
-    # Evaluation auf Testdaten
-    rf_mse_ipcw = ipc_weighted_mse( y_true=df_test['survived'].values, 
-                                    y_pred=clf.predict_proba(df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1))[:,1], 
-                                    sample_weight=df_test['weights_ipcw']   )
-    # Prediction für X_erwartung
-    rf_y_pred_X_point = clf.predict_proba(X_pred_point)[:,1]
+        ######################################### Random Forest Modell #########################################################################################
+        # Fitten des Random Forest Modells
+        params_rf['random_state'] = seed
+        clf = RandomForestClassifier(**params_rf)
+        clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
+                    y=df_train['survived'], 
+                    sample_weight=df_train['weights_ipcw']  )
+        # Evaluation auf Testdaten
+        rf_mse_ipcw = ipc_weighted_mse( y_true=df_test['survived'].values, 
+                                        y_pred=clf.predict_proba(df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1))[:,1], 
+                                        sample_weight=df_test['weights_ipcw']   )
+        # Prediction für X_erwartung
+        rf_y_pred_X_point = clf.predict_proba(X_pred_point)[:,1]
+
+    else:
+        wb_mse_ipcw = 0.
+        wb_cindex_ipcw = 0.
+        wb_y_pred_X_point = [0.]
+        rf_mse_ipcw = 0.
+        rf_y_pred_X_point = [0.]
 
 
     #######################################################################################################################################################
@@ -290,35 +299,43 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     #######################################################################################################################################################
 
 
+    
     ### IJK Variance Estimation WEIGHTED ##################################################################################################################
-    tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
-    biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
-                                                                    T_N_b=tnb,
-                                                                    weights=df_train['weights_ipcw']  )
-    ijk_var_pred_X_point = biased_var_estimate - bias_correction
+    if ijk_std_calc:
+        tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
+        biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
+                                                                        T_N_b=tnb,
+                                                                        weights=df_train['weights_ipcw']  )
+        ijk_var_pred_X_point = biased_var_estimate - bias_correction
+    else:
+        ijk_var_pred_X_point = 0.
 
 
     ### Bootstrap Variance Estimation WEIGHTED  ###########################################################################################################
-    n = df_train.shape[0]
-    rng = np.random.default_rng(seed)
-    first_level_boot_indices = rng.choice(np.arange(n), size=(B_1, n), replace=True)
-    preds = np.zeros(B_1)
+    if boot_std_calc:
+        n = df_train.shape[0]
+        rng = np.random.default_rng(seed)
+        first_level_boot_indices = rng.choice(np.arange(n), size=(B_first_level, n), replace=True)
+        preds = np.zeros(B_first_level)
 
-    clf = RandomForestClassifier(**params_rf)
-    kmf = KaplanMeierFitter()
-    for b in range(B_1):
-        ### cut data at tau // ipcw weights ###
-        df_train_ = df_train.iloc[first_level_boot_indices[b]]
-        kmf.fit(df_train_['time'], event_observed=1-df_train_['event'])
-        df_train_ = create_new_dataset_with_ipcw_weights(data=df_train_,t=tau, kmf=kmf)
+        clf = RandomForestClassifier(**params_rf)
+        kmf = KaplanMeierFitter()
+        for b in range(B_first_level):
+            ### cut data at tau // ipcw weights ###
+            df_train_ = df_train.iloc[first_level_boot_indices[b]]
+            kmf.fit(df_train_['time'], event_observed=1-df_train_['event'])
+            df_train_ = create_new_dataset_with_ipcw_weights(data=df_train_,t=tau, kmf=kmf)
 
-        clf.set_params(random_state=seed+b)
-        clf.fit(X=df_train_.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
-                y=df_train_['survived'], 
-                sample_weight=df_train_['weights_ipcw'])
-        preds[b] = clf.predict_proba(X_pred_point)[:, 1]
+            clf.set_params(random_state=seed+b)
+            clf.fit(X=df_train_.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
+                    y=df_train_['survived'], 
+                    sample_weight=df_train_['weights_ipcw'])
+            preds[b] = clf.predict_proba(X_pred_point)[:, 1]
 
-    bootstrap_std_pred_X_point = np.std(preds)
+        bootstrap_std_pred_X_point = np.std(preds)
+    else:
+        bootstrap_std_pred_X_point = 0.
+
 
     ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED ######################################################################################
 
