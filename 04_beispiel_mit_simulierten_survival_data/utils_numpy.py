@@ -9,9 +9,16 @@ from sklearn.model_selection import train_test_split
 
 
 
-def create_new_dataset_with_ipcw_weights(
-    data: pd.DataFrame, t: np.float64, kmf: KaplanMeierFitter
-) -> pd.DataFrame:
+def create_new_dataset_with_ipcw_weights(data: pd.DataFrame, t: np.float64, kmf: KaplanMeierFitter) -> pd.DataFrame:
+    """
+    Create a new dataset with inverse probability of censoring weighting (IPCW) weights.
+    Args:
+        data (pd.DataFrame): The original dataset.
+        t (np.float64): The time threshold for censoring.
+        kmf (KaplanMeierFitter): The KaplanMeierFitter object.
+    Returns:
+        pd.DataFrame: The new dataset with IPCW weights.
+    """
     new_data = data.copy()
 
     new_data.loc[(data["time"] <= t) & (data["event"] == 1), "survived"] = int(0)
@@ -33,12 +40,17 @@ def create_new_dataset_with_ipcw_weights(
     return pd.DataFrame(new_data)
 
 
-def train_test_split_into_df(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    y_train: np.ndarray,
-    y_test: np.ndarray,
-) -> pd.DataFrame:
+def train_test_split_into_df(df_train: pd.DataFrame, df_test: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray) -> pd.DataFrame:
+    """
+    Splits the train and test DataFrames and assigns the event and time columns.
+    Args:
+        df_train (pd.DataFrame): The training DataFrame.
+        df_test (pd.DataFrame): The testing DataFrame.
+        y_train (np.ndarray): The target values for the training data.
+        y_test (np.ndarray): The target values for the testing data.
+    Returns:
+        pd.DataFrame: The modified train and test DataFrames with event and time columns assigned.
+    """
     # Reset index of train and test DataFrames
     df_train.reset_index(drop=True, inplace=True)
     df_test.reset_index(drop=True, inplace=True)
@@ -55,6 +67,29 @@ def train_test_split_into_df(
 
 
 def create_train_test_data(params: dict) -> pd.DataFrame:
+    """
+    Generate train and test datasets for survival analysis.
+    Args:
+        params (dict): A dictionary containing the following parameters:
+            - shape_weibull (float): Shape parameter for the Weibull distribution.
+            - scale_weibull_base (float): Scale parameter for the Weibull distribution.
+            - rate_censoring (float): Rate parameter for censoring.
+            - n (int): Number of samples.
+            - b_bloodp (float): Coefficient for blood pressure in the Weibull distribution.
+            - b_diab (float): Coefficient for diabetes in the Weibull distribution.
+            - b_age (float): Coefficient for age in the Weibull distribution.
+            - b_bmi (float): Coefficient for BMI in the Weibull distribution.
+            - b_kreat (float): Coefficient for kreatinkinase in the Weibull distribution.
+            - seed (int): Random seed.
+            - tau (float): Cut-off time for data.
+    Returns:
+        df_train (pd.DataFrame): Training dataset.
+        df_test (pd.DataFrame): Test dataset.
+        n_events_after_cut_train (float): Number of events in the training dataset after cut-off time.
+        portion_censored_after_cut_train (float): Proportion of censored data in the training dataset after cut-off time.
+        n_events_after_cut_test (float): Number of events in the test dataset after cut-off time.
+        portion_censored_after_cut_test (float): Proportion of censored data in the test dataset after cut-off time.
+    """
 
     ### Parameter für Weibull-Verteilung und Censoring ###
     shape_weibull = params.get('shape_weibull')
@@ -146,10 +181,31 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
 
 
 def ipc_weighted_mse(y_true, y_pred, sample_weight):
+    """
+    Calculates the weighted mean squared error (MSE) between the true values and the predicted values.
+
+    Parameters:
+    - y_true (array-like): The true values.
+    - y_pred (array-like): The predicted values.
+    - sample_weight (array-like): The weights assigned to each sample.
+
+    Returns:
+    - weighted_mse (float): The weighted mean squared error.
+
+    """
     return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
 
 def get_Nbi(lists):
+    """
+    Calculate the count of each unique value in a 2D array.
+
+    Parameters:
+    - lists (list): A 2D list of integers.
+
+    Returns:
+    - counts (ndarray): A 2D array where each row represents the count of each unique value in the corresponding row of the input array.
+    """
     arr = np.array(lists)
     max_value = arr.max()
     counts = np.apply_along_axis(
@@ -158,9 +214,23 @@ def get_Nbi(lists):
     return counts
 
 
-def inf_JK_bagged_variance(
-    N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray = None
-):
+def calculate_ijk_variance(clf: RandomForestClassifier,X_pred_point: pd.DataFrame, df_train:pd.DataFrame)-> float :
+
+    """
+    Calculates the biased variance estimate and bias correction for a given random forest classifier, 
+    prediction point, and training data.
+    Parameters:
+    - clf: The classifier object used for prediction.
+    - X_pred_point: The prediction point as a pandas DataFrame.
+    - df_train: The training data as a pandas DataFrame.
+    Returns:
+    - biased_var_estimate: The biased variance estimate.
+    - bias_correction: The bias correction.
+    """
+
+    T_N_b = tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
+    N_bi=get_Nbi(clf.estimators_samples_)
+    weights = df_train['weights_ipcw']
     B, n = N_bi.shape
     T_N_b_mean = np.mean(T_N_b, axis=0)
     m = np.count_nonzero(weights)
@@ -172,6 +242,48 @@ def inf_JK_bagged_variance(
     bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
 
     return biased_var_estimate, bias_correction
+
+
+def calculate_jk_after_bootstrap_variance(clf: RandomForestClassifier, X_pred_point: pd.DataFrame, params_rf: dict, df_train: pd.DataFrame)-> float:
+
+    """
+    Calculates the Jackknife-after-Bootstrap variance (unbiased, if equal weights are used during bootstrapsampling) 
+    for a given random forest classifier.
+    Parameters:
+        clf (RandomForestClassifier): The random forest classifier.
+        X_pred_point (pd.DataFrame): The input data point for prediction.
+        params_rf (dict): The parameters of the random forest.
+        df_train (pd.DataFrame): The training dataset.
+    Returns:
+        float: The Jackknife-after-Bootstrap variance.
+    """
+    n_samples = df_train.shape[0]
+
+    # Precompute predictions for all trees
+    tree_preds = np.array([estimator.predict_proba(X_pred_point.values.reshape(1, -1))[0, 1] for estimator in clf.estimators_])
+
+    # Cache the estimators' samples array for efficient reuse
+    estimators_samples = np.array(clf.estimators_samples_, dtype=object)
+
+    # Prepare a boolean mask for each sample's presence in each estimator's bootstrap
+    presence_mask = np.zeros((n_samples, params_rf['n_estimators']), dtype=bool)
+    for i, samples in enumerate(estimators_samples):
+        samples = np.array(samples, dtype=int)
+        presence_mask[samples, i] = True
+
+    theta_is = []
+    for ii in range(n_samples):
+        indices_without_ii = np.where(~presence_mask[ii])[0]
+        if 0 < len(indices_without_ii) < params_rf['n_estimators']:
+            theta_is.append(tree_preds[indices_without_ii].mean())
+
+    theta_is = np.array(theta_is)
+    theta = clf.predict_proba(X_pred_point.values.reshape(1, -1))
+    var_jka_biased = np.sum((theta_is - theta[0, 1]) ** 2) * (n_samples - 1) / n_samples
+
+    var_jka_correction = (np.exp(1) - 1) * (n_samples / params_rf['n_estimators']) * np.var(tree_preds)
+    return var_jka_biased - var_jka_correction
+
 
 
 def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict, B_first_level: int ,
@@ -224,15 +336,15 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
         # Fitten des Random Forest Modells
         params_rf['random_state'] = seed
         clf = RandomForestClassifier(**params_rf)
-        clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
-                    y=df_train['survived'], 
-                    sample_weight=df_train['weights_ipcw']  )
+        clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1).values, 
+                    y=df_train['survived'].values, 
+                    sample_weight=df_train['weights_ipcw'].values  )
         # Evaluation auf Testdaten
         rf_mse_ipcw = ipc_weighted_mse( y_true=df_test['survived'].values, 
-                                        y_pred=clf.predict_proba(df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1))[:,1], 
-                                        sample_weight=df_test['weights_ipcw']   )
+                                        y_pred=clf.predict_proba(df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1).values)[:,1], 
+                                        sample_weight=df_test['weights_ipcw'].values   )
         # Prediction für X_erwartung
-        rf_y_pred_X_point = clf.predict_proba(X_pred_point)[:,1]
+        rf_y_pred_X_point = clf.predict_proba(X_pred_point.values)[:,1]
 
     else:
         wb_mse_ipcw = 0.
@@ -250,13 +362,17 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     
     ### IJK Variance Estimation WEIGHTED ##################################################################################################################
     if ijk_std_calc:
-        tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
-        biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
-                                                                        T_N_b=tnb,
-                                                                        weights=df_train['weights_ipcw']  )
+        biased_var_estimate, bias_correction = calculate_ijk_variance( clf = clf, X_pred_point = X_pred_point, df_train = df_train)
         ijk_var_pred_X_point = biased_var_estimate - bias_correction
     else:
         ijk_var_pred_X_point = 0.
+
+
+    ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED ######################################################################################
+    if jk_ab_calc:
+        jka_var_unbiased = calculate_jk_after_bootstrap_variance(clf = clf, X_pred_point = X_pred_point, params_rf = params_rf, df_train = df_train)
+    else:
+        jka_var_unbiased = 0.
 
 
     ### Bootstrap Variance Estimation WEIGHTED  ###########################################################################################################
@@ -280,62 +396,14 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
                     sample_weight=df_train_['weights_ipcw'])
             preds[b] = clf.predict_proba(X_pred_point)[:, 1]
 
-        bootstrap_std_pred_X_point = np.std(preds)
+        bootstrap_var_pred_X_point = np.var(preds)
     else:
-        bootstrap_std_pred_X_point = 0.
+        bootstrap_var_pred_X_point = 0.
 
-    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train,\
-           portion_events_after_cut_test, portion_censored_after_cut_test, portion_no_events_after_cut_test,\
-           wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, ijk_var_pred_X_point, bootstrap_std_pred_X_point
-
-
-'''    ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED ######################################################################################
-    if jk_ab_calc:
-
-                # Input prediction sample
-        x_pred = np.array([-0.42016338,  0.26413616, -1.64544487, -0.70228821 , 0.51820725]).reshape(1, -1)
-
-        # Precompute predictions for all trees
-        tree_preds = np.array([estimator.predict_proba(x_pred)[0, 1] for estimator in rf.estimators_])
-
-        # Cache the estimators' samples array for efficient reuse
-        estimators_samples = np.array(rf.estimators_samples_, dtype=object)
-
-        # Prepare a boolean mask for each sample's presence in each estimator's bootstrap
-        presence_mask = np.zeros((n_samples, n_estimators), dtype=bool)
-        for i, samples in enumerate(estimators_samples):
-            # Convert the sample list to a NumPy array of integers
-            samples = np.array(samples, dtype=int)
-            presence_mask[samples, i] = True
-
-        # Calculate the theta_is efficiently
-        theta_is = []
-        for ii in range(n_samples):
-            # Use the presence mask to identify trees where sample ii is not in the bootstrap sample
-            indices_without_ii = np.where(~presence_mask[ii])[0]
-
-            # Skip samples that are included in all or none of the trees
-            if 0 < len(indices_without_ii) < n_estimators:
-                # Calculate the mean prediction for these trees
-                theta_is.append(tree_preds[indices_without_ii].mean())
-
-        # Convert theta_is to a NumPy array
-        theta_is = np.array(theta_is)
-
-        # Compute the final variance estimates
-        theta = rf.predict_proba(x_pred)
-        var_jka_biased = np.sum((theta_is - theta[0, 1]) ** 2) * (n_samples - 1) / n_samples
-
-        var_jka_correction = (np.exp(1) - 1) * (n_samples / n_estimators) * np.var(tree_preds)
-        var_jka_unbiased = var_jka_biased - var_jka_correction
-
-        var_jka_unbiased
-
-    else:
-        var_jka_unbiased = 0.
-'''
         
-
+    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train,\
+        portion_events_after_cut_test, portion_censored_after_cut_test, portion_no_events_after_cut_test,\
+        wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, ijk_var_pred_X_point, bootstrap_var_pred_X_point, jka_var_unbiased
    
 
 
