@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
 from lifelines import KaplanMeierFitter
-from sklearn.ensemble import RandomForestClassifier
 from lifelines import KaplanMeierFitter, WeibullAFTFitter
 from sksurv.metrics import concordance_index_ipcw
 from sksurv.util import Surv
 from sklearn.model_selection import train_test_split
+from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 
 
 def create_new_dataset_with_ipcw_weights(
@@ -25,7 +25,7 @@ def create_new_dataset_with_ipcw_weights(
     """
     # Fit the Kaplan-Meier estimator
     kmf = KaplanMeierFitter()
-    kmf.fit(data["time"], event_observed=1 - data["event"])
+    kmf.fit(np.array(data["time"],dtype=float), event_observed=  np.array(1 - data["event"],dtype=bool))
 
     # Copy the data to avoid modifying the original dataframe
     new_data = data.copy()
@@ -223,26 +223,8 @@ def ipc_weighted_mse(y_true, y_pred, sample_weight):
     return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
 
-def get_Nbi(lists):
-    """
-    Calculate the count of each unique value in a 2D array.
-
-    Parameters:
-    - lists (list): A 2D list of integers.
-
-    Returns:
-    - counts (ndarray): A 2D array where each row represents the count of each unique value in the corresponding row of the input array.
-    """
-    arr = np.array(lists)
-    max_value = arr.max()
-    counts = np.apply_along_axis(
-        lambda x: np.bincount(x, minlength=max_value + 1), axis=1, arr=arr
-    )
-    return counts
-
-
 def calculate_ijk_variance(
-    clf: RandomForestClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
+    clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
 ) -> float:
     """
     Calculates the biased variance estimate and bias correction for a given random forest classifier,
@@ -256,26 +238,25 @@ def calculate_ijk_variance(
     - bias_correction: The bias correction.
     """
 
-    T_N_b = tnb = np.array(
-        [tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]
-    )
-    N_bi = get_Nbi(clf.estimators_samples_)
+    T_N_b, pred = clf.predict_proba(X_pred_point.values)
+    N_bi = clf.nbi
     weights = df_train["weights_ipcw"]
     B, n = N_bi.shape
     T_N_b_mean = np.mean(T_N_b, axis=0)
-    m = np.count_nonzero(weights)
 
-    cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - T_N_b_mean)) / B
     cov_i_hoch2 = cov_i**2
-    biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+    array = cov_i_hoch2/weights.values.reshape(-1,1)
 
-    bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
+    biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * np.sum(weights**2)
+
+    bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
 
     return biased_var_estimate, bias_correction
 
 
 def calculate_jk_after_bootstrap_variance(
-    clf: RandomForestClassifier,
+    clf: DecisionTreeBaggingClassifier,
     X_pred_point: pd.DataFrame,
     params_rf: dict,
     df_train: pd.DataFrame,
@@ -284,7 +265,7 @@ def calculate_jk_after_bootstrap_variance(
     Calculates the Jackknife-after-Bootstrap variance (unbiased, if equal weights are used during bootstrapsampling)
     for a given random forest classifier.
     Parameters:
-        clf (RandomForestClassifier): The random forest classifier.
+        clf (DecisionTreeBaggingClassifier): The random forest classifier.
         X_pred_point (pd.DataFrame): The input data point for prediction.
         params_rf (dict): The parameters of the random forest.
         df_train (pd.DataFrame): The training dataset.
@@ -294,15 +275,10 @@ def calculate_jk_after_bootstrap_variance(
     n_samples = df_train.shape[0]
 
     # Precompute predictions for all trees
-    tree_preds = np.array(
-        [
-            estimator.predict_proba(X_pred_point.values.reshape(1, -1))[0, 1]
-            for estimator in clf.estimators_
-        ]
-    )
+    tree_preds, theta = clf.predict_proba(X_pred_point.values)
 
     # Cache the estimators' samples array for efficient reuse
-    estimators_samples = np.array(clf.estimators_samples_, dtype=object)
+    estimators_samples = clf.boot_indices
 
     # Prepare a boolean mask for each sample's presence in each estimator's bootstrap
     presence_mask = np.zeros((n_samples, params_rf["n_estimators"]), dtype=bool)
@@ -317,8 +293,7 @@ def calculate_jk_after_bootstrap_variance(
             theta_is.append(tree_preds[indices_without_ii].mean())
 
     theta_is = np.array(theta_is)
-    theta = clf.predict_proba(X_pred_point.values.reshape(1, -1))
-    var_jka_biased = np.sum((theta_is - theta[0, 1]) ** 2) * (n_samples - 1) / n_samples
+    var_jka_biased = np.sum((theta_is - theta) ** 2) * (n_samples - 1) / n_samples
 
     var_jka_correction = (
         (np.exp(1) - 1)
@@ -367,7 +342,6 @@ def calculate_bootstrap_variance(
     columns_to_drop_indices = [df_train.columns.get_loc(col) for col in columns_to_drop]
 
     # Preallocate the classifier and Kaplan-Meier fitter objects
-    clf = RandomForestClassifier(**params_rf)
     kmf = KaplanMeierFitter()
 
     preds = np.empty(B_first_level)
@@ -398,14 +372,12 @@ def calculate_bootstrap_variance(
         weights_ipcw = df_train_ipcw["weights_ipcw"].values
 
         # Set the random state and fit the classifier
-        clf.set_params(random_state=seed + b)
-        clf.fit(X=X_train_ipcw, y=y_train_ipcw, sample_weight=weights_ipcw)
+        clf = DecisionTreeBaggingClassifier(params_rf)
+        clf.set_random_state(random_state=seed + b)
+        clf.fit(X=X_train_ipcw, y=y_train_ipcw, sample_weights=weights_ipcw)
 
         # Predict and store result
-        proba = clf.predict_proba(X_pred_point.values)[0]
-        preds[b] = (
-            proba[1] if len(proba) > 1 else (1.0 if clf.classes_[0] == 1 else 0.0)
-        )
+        _ ,preds[b] = clf.predict_proba(X_pred_point.values)
 
     # Calculate variance using numpy
     return np.var(preds, ddof=1)
@@ -530,26 +502,27 @@ def simulation(
         ######################################### Random Forest Modell #########################################################################################
         # Fitten des Random Forest Modells
         params_rf["random_state"] = seed
-        clf = RandomForestClassifier(**params_rf)
+        clf = DecisionTreeBaggingClassifier(params_rf)
         clf.fit(
             X=df_train.drop(
                 ["time", "event", "weights_ipcw", "survived"], axis=1
             ).values,
             y=df_train["survived"].values,
-            sample_weight=df_train["weights_ipcw"].values,
+            sample_weights=df_train["weights_ipcw"].values,
         )
+
+        _ , pred  =clf.predict_proba(df_test.drop(
+                    ["weights_ipcw", "survived", "time", "event"], axis=1
+                ).values)
+
         # Evaluation auf Testdaten
         rf_mse_ipcw = ipc_weighted_mse(
             y_true=df_test["survived"].values,
-            y_pred=clf.predict_proba(
-                df_test.drop(
-                    ["weights_ipcw", "survived", "time", "event"], axis=1
-                ).values
-            )[:, 1],
+            y_pred=pred,
             sample_weight=df_test["weights_ipcw"].values,
         )
         # Prediction für X_erwartung
-        rf_y_pred_X_point = clf.predict_proba(X_pred_point.values)[:, 1]
+        _ ,rf_y_pred_X_point = clf.predict_proba(X_pred_point.values)
 
     else:
         wb_mse_ipcw = 0.0
