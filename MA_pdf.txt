@@ -1,0 +1,29 @@
+S.2
+- vock ipcw_Gewichte
+
+S.5
+- bias jackknife kapitel:
+   in diesen beispielen haben wir gesehen, dass dies funktioniert.  in kapitel so und so werden wir sehen, dass die für alle gilt....
+
+S.12 
+- jackknife schätzer kann angesehen werden als ableitung...
+- 2.5.10  that can be easily shown, maybe show first step...
+
+S.15
+- 2.6.3 mit frau jahns notizen besser aufstellen
+- quelle in computation (2.buch am anfang der literatursuche)
+
+S.20
+- 2.8.4 vielleicht mit E(..) ungefähr 
+
+S.25/26
+- frau jahns idee umsetzen und ihr schicken
+- besser erklären wieso wb() gebraucht wird (taucht aus dem nichhts aus )
+
+S.27
+- Fehler in bias vor varianzzerlegung
+
+
+
+
+
