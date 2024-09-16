@@ -1,0 +1,9 @@
+params_data_creation = { 'shape_weibull': 1, 'scale_weibull_base': 10000, 'rate_censoring': 0.01,
+                        'b_bloodp': -0.405, 'b_diab': -0.4, 'b_age': -0.05, 'b_bmi': -0.01, 'b_kreat': -0.2, 
+                        'n': n, 'seed': seed, 'tau': tau}
+
+Train:
+Portion of events after cut:     18.82%,   n=198.0
+Portion of no events after cut:  50.75%,    n=533.0
+Portion of censored after cut:   30.43%,   n=320.0
+
