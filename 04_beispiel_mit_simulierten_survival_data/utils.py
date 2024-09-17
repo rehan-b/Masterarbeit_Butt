@@ -323,61 +323,44 @@ def calculate_bootstrap_variance(
     Returns:
         float: The bootstrap variance of predictions.
     """
-    # Precompute reusable values and objects
-    n = df_train.shape[0]
-    rng = np.random.default_rng(seed)
 
-    # Generate bootstrapped indices once
-    first_level_boot_indices = rng.choice(
-        np.arange(n), size=(B_first_level, n), replace=True
-    )
-
-    # Convert the entire DataFrame to a Numpy array to avoid repeated use of .iloc
-    df_train_np = df_train.values
-    columns_to_drop = ["time", "event", "weights_ipcw", "survived"]
-
-    # Identify the column indices for 'time', 'event', and other relevant columns
-    time_col_idx = df_train.columns.get_loc("time")
-    event_col_idx = df_train.columns.get_loc("event")
-    columns_to_drop_indices = [df_train.columns.get_loc(col) for col in columns_to_drop]
-
-    # Preallocate the classifier and Kaplan-Meier fitter objects
-    kmf = KaplanMeierFitter()
-
+    np_train = df_train.values
+    df_train_columns_name = df_train.columns
     preds = np.empty(B_first_level)
 
+    # Generate firstlevel bootstrapped indices
+    df = create_new_dataset_with_ipcw_weights(data=df_train, t=tau)
+    
+    
+    rng = np.random.default_rng(seed)
+    first_level_boot_indices = rng.choice(
+        a=np.arange(df_train.shape[0]), size=(B_first_level, df_train.shape[0]), replace=True, p=df["weights_ipcw"].values
+    )
+    
     for b in range(B_first_level):
-        # Direct Numpy indexing instead of .iloc
-        boot_indices = first_level_boot_indices[b]
-        df_train_boot = df_train_np[boot_indices, :]
 
-        # Extract the relevant columns using the identified indices
-        time_values = df_train_boot[:, time_col_idx]
-        event_values = df_train_boot[:, event_col_idx]
+        np_train_boot = np_train[first_level_boot_indices[b], :]
 
-        # Fit the Kaplan-Meier estimator using Numpy arrays
-        kmf.fit(
-            np.array(time_values, dtype=float),
-            event_observed=(1 - event_values).astype(bool),
+        # Create the new dataset with IPCW weights
+        df_train_boot = create_new_dataset_with_ipcw_weights(
+            data=pd.DataFrame(np_train_boot, columns=df_train_columns_name), t=tau
         )
-
-        # Create the new dataset with IPCW weights using the optimized function
-        df_train_ipcw = create_new_dataset_with_ipcw_weights(
-            data=pd.DataFrame(df_train_boot, columns=df_train.columns), t=tau
-        )
-
-        # Prepare the data for fitting by dropping the unnecessary columns using numpy
-        X_train_ipcw = np.delete(df_train_ipcw.values, columns_to_drop_indices, axis=1)
-        y_train_ipcw = df_train_ipcw["survived"].values
-        weights_ipcw = df_train_ipcw["weights_ipcw"].values
 
         # Set the random state and fit the classifier
         clf = DecisionTreeBaggingClassifier(params_rf)
-        clf.set_random_state(random_state=seed + b)
-        clf.fit(X=X_train_ipcw, y=y_train_ipcw, sample_weights=weights_ipcw)
-
+        clf.set_random_state(random_state=seed + 1000+ b )
+        
+        clf.fit(
+            X=df_train_boot.drop(
+                ["time", "event", "weights_ipcw", "survived"], axis=1
+            ).values,
+            y=df_train_boot["survived"].values,
+            sample_weights=df_train_boot["weights_ipcw"].values,
+        )
+        
         # Predict and store result
-        _ ,preds[b] = clf.predict_proba(X_pred_point.values)
+        _ ,pred = clf.predict_proba(X_pred_point.values)
+        preds[b] = pred[0]
 
     # Calculate variance using numpy
     return np.var(preds, ddof=1)
