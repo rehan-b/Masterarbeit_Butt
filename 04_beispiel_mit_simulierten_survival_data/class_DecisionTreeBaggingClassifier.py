@@ -196,4 +196,4 @@ class DecisionTreeBaggingClassifier:
             The new random state to be used for bootstrapping and decision trees.
         """
         self.tree_params['random_state'] = random_state
-        print(f"Updated random_state to: {random_state}")
+        print(f"Updated random_state to: {self.tree_params['random_state']}")
