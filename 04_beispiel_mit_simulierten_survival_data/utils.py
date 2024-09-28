@@ -334,7 +334,7 @@ def calculate_bootstrap_variance(
     
     rng = np.random.default_rng(seed)
     first_level_boot_indices = rng.choice(
-        a=np.arange(df_train.shape[0]), size=(B_first_level, df_train.shape[0]), replace=True, p=df["weights_ipcw"].values
+        a=np.arange(df_train.shape[0]), size=(B_first_level, df_train.shape[0]), replace=True
     )
     
     for b in range(B_first_level):
