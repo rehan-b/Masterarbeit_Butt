@@ -1,0 +1,58 @@
+n_train= 999// Events: 70.0 (6.97 %) // Censored: 297.0 (29.69 %) // B_RF: 1000 // (B_1): 0 
+
+### Standard Deviation: ###
+WB EMP-STD:                 0.0075
+RF EMP-STD:                 0.0171
+
+IJK STD (for RF) Mean-est               : 0.0185  
+ rel. Abweichung zu emp. std 8.2597 % 
+ std. des schätzers 0.0117
+
+IJK STD - biased (for RF) Mean-est               : 0.0405  
+ rel. Abweichung zu emp. std 136.6096 % 
+ std. des schätzers 0.0284
+
+JK-AB(un-weighted) STD (for RF) Mean-est: 0.0318 
+ rel. Abweichung zu emp. std 85.9202 %  
+ std. des schätzers 0.0219 
+
+Boot STD (for RF) Mean-est              : 0.0000 
+ rel. Abweichung zu emp. std -100.0000 %  
+ std. des schätzers 0.0000 
+
+
+
+### mean Data Stats over all simulations: ###
+Number of simulations: 1000
+cut-off time tau: 37
+
+Train (999):
+Events:     6.97  %,  n=70.0
+No Events:  63.34 %,  n=633.0
+Censored:   29.69 %,  n=297.0
+Test  (428):
+Events:     7.04  %,   n=30.0
+No Events:  63.22 %,   n=271.0
+Censored:   29.74  %,   n=127.0
+
+
+### Evaluation: ###
+WB C-Index IPCW: 0.6420
+WB MSE IPCW: 0.0750
+RF MSE IPCW: 0.0755
+
+
+###Prediction Results:###
+True Y: 0.9528f
+WB Y_pred: 0.9410
+RF Y_pred: 0.9435
+
+
+
+### Simulation Parameters: ###
+first_level_B for bootstrap variance estimation (B_1): 0
+Data Creation Parameters:
+{'shape_weibull': 1, 'scale_weibull_base': 28000, 'rate_censoring': 0.01, 'b_bloodp': -0.405, 'b_diab': -0.4, 'b_age': -0.05, 'b_bmi': -0.01, 'b_kreat': -0.2, 'n': 1428, 'seed': 42, 'tau': 37}
+Random Forest Parameter:
+{'n_estimators': 1000, 'max_depth': 4, 'min_samples_split': 5, 'max_features': 'log2', 'random_state': 42, 'weighted_bootstrapping': True}
+the above seeds (42) are start_seed for the simulation function
