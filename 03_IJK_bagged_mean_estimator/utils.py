@@ -1,5 +1,5 @@
 import numpy as np
-
+import pandas as pd
 
 def create_bootstrap_indices_and_Nbi(
     n: int, B: int, seed: int = None, weights: np.ndarray = None
@@ -35,27 +35,18 @@ def bagging_mean_estimators(x, B, seed, weights):
     return T_N_b, N_bi
 
 
-def inf_JK_bagged_variance(N_bi: np.ndarray, T_N_b: np.ndarray):
+def inf_JK_bagged_variance_weighted(N_bi, T_N_b, weights,m) :
     B, n = N_bi.shape
     T_N_b_mean = np.mean(T_N_b, axis=0)
+    
 
-    cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i = ((N_bi - n * weights).T @ (T_N_b - T_N_b_mean)) / B
     cov_i_hoch2 = cov_i**2
-    biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+    array = cov_i_hoch2/weights
 
-    bias_correction = ((n - 1) / B) * np.var(T_N_b, axis=0)
-    return biased_var_estimate, bias_correction
+    biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * np.sum(weights**2)
 
-
-def inf_JK_bagged_variance_weighted(N_bi, T_N_b, weights, m):
-    B, n = N_bi.shape
-    T_N_b_mean = np.mean(T_N_b, axis=0)
-
-    cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
-    cov_i_hoch2 = cov_i**2
-    biased_var_estimate = np.sum(cov_i_hoch2)
-
-    bias_correction = n / B * (m - 1) / m * np.var(T_N_b)
+    bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
 
     return biased_var_estimate, bias_correction
 
@@ -68,4 +59,6 @@ def simulate_bagging_and_ijk_var_calculation(x1, B, seed, sim_i, weights, m):
 
     ijk_var_bagged_est = biased_var_estimate - bias_correction
     theta_bagged = T_N_b.mean()
-    return ijk_var_bagged_est, theta_bagged
+    return biased_var_estimate,bias_correction, theta_bagged
+
+
