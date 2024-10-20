@@ -18,8 +18,7 @@ JK-AB(un-weighted) STD (for RF) Mean-est: 0.0739
 
 Boot STD (for RF) Mean-est              : 0.0268 
  rel. Abweichung zu emp. std 8.8551 %  
- std. des schätzers 0.0000 
-
+ std. des schätzers 0.0085
 
 
 ### mean Data Stats over all simulations: ###
