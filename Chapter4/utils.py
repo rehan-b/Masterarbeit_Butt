@@ -9,114 +9,64 @@ from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 
 
 def create_new_dataset_with_ipcw_weights(
-    data: pd.DataFrame, t: np.float64
+    data: pd.DataFrame, t: np.float64, kmf=None
 ) -> pd.DataFrame:
     """
     Create a new dataset with inverse probability of censoring weighting (IPCW) weights.
-    ------------------------------------------------------------------------------------
-    survived column: 0: died , 1: survived, 999: censored  // till time t
-
-    Args:
-        data (pd.DataFrame): The original dataset.
-        t (np.float64): The time threshold for censoring.
-
-    Returns:
-        pd.DataFrame: The new dataset with IPCW weights.
     """
-    # Fit the Kaplan-Meier estimator
-    kmf = KaplanMeierFitter()
-    kmf.fit(np.array(data["time"],dtype=float), event_observed=  np.array(1 - data["event"],dtype=bool))
+    if kmf is None:
+        # Fit the Kaplan-Meier estimator
+        kmf = KaplanMeierFitter()
+        kmf.fit(
+            durations=data["time"].astype(float),
+            event_observed=1 - data["event"].astype(bool),
+        )
 
     # Copy the data to avoid modifying the original dataframe
     new_data = data.copy()
 
-    # Efficiently calculate the 'survived' column using np.select for vectorized operations
+    # Determine survival status at time t
     conditions = [
-        (new_data["time"] <= t) & (new_data["event"] == 1),
-        (new_data["time"] >= t),
-        (new_data["time"] <= t) & (new_data["event"] == 0),
+        (new_data["time"] <= t) & (new_data["event"] == 1),  # Died before t
+        (new_data["time"] >= t),                             # Survived past t
+        (new_data["time"] <= t) & (new_data["event"] == 0),  # Censored before t
     ]
     choices = [0, 1, 999]
     new_data["survived"] = np.select(conditions, choices, default=999)
 
-    # Calculate the IPCW weights
+    # Calculate IPCW weights
     survival_times = new_data["time"]
-    survival_probabilities = kmf.survival_function_at_times(
-        survival_times
-    ).values.flatten()
+    survival_probabilities = kmf.survival_function_at_times(survival_times).values.flatten()
     ipcw_weights = 1 / survival_probabilities
     ipcw_weight_tau = 1 / kmf.survival_function_at_times(t).values.flatten()[0]
 
-    # Apply weights based on the 'survived' column
+    # Assign weights
     new_data["weights_ipcw"] = np.where(
         new_data["survived"] == 1,
         ipcw_weight_tau,
         np.where(new_data["survived"] == 0, ipcw_weights, 0),
     )
 
-    # Normalize the weights
+    # Normalize weights
     new_data["weights_ipcw"] /= new_data["weights_ipcw"].sum()
 
-    return new_data
-
-def create_train_test_data(tau, data: pd.DataFrame, X_columns, seed, test_size ) -> pd.DataFrame:
-
-
-    ### Startified Split in Train und Testdaten #################################################################
-    X = data[X_columns]
-    y = Surv.from_arrays(event=data["event"], time=data["time"])
-    
-    df_train, df_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=seed
-    )
-
-    # Transform to DataFrame
-    df_train.reset_index(drop=True, inplace=True)
-    df_test.reset_index(drop=True, inplace=True)
-
-    y_train_df = pd.DataFrame(y_train, columns=["event", "time"])
-    y_test_df = pd.DataFrame(y_test, columns=["event", "time"])
-
-    df_train[["event", "time"]] = y_train_df[["event", "time"]]
-    df_test[["event", "time"]] = y_test_df[["event", "time"]]
-
-    ### cut data at tau // create ipcw weights ###################################################################
-    df_train = create_new_dataset_with_ipcw_weights(data=df_train, t=tau)
-    df_test = create_new_dataset_with_ipcw_weights(data=df_test, t=tau)
-
-    ### stats for training data and test data ####################################################################
-    # calculate portion of events and censored data after cut for training data
-    portions_at_cutpoint = df_train["survived"].value_counts(normalize=True)
+   
+    portions_at_cutpoint = new_data["survived"].value_counts(normalize=True)
     if 999 in portions_at_cutpoint.keys():
-        portion_censored_after_cut_train = portions_at_cutpoint[999]
+        portion_censored_after_cut = portions_at_cutpoint[999]
     else:
-        portion_censored_after_cut_train = 0
+        portion_censored_after_cut = 0
 
     if 0 in portions_at_cutpoint.keys():
-        n_events_after_cut_train = portions_at_cutpoint[0] * df_train.shape[0]
+        n_events_after_cut = portions_at_cutpoint[0] * new_data.shape[0]
     else:
-        n_events_after_cut_train = 0
-
-    # calculate portion of events and censored data after cut  for test data
-    portions_at_cutpoint_test = df_test["survived"].value_counts(normalize=True)
-
-    if 999 in portions_at_cutpoint_test.keys():
-        portion_censored_after_cut_test = portions_at_cutpoint_test[999]
-    else:
-        portion_censored_after_cut_test = 0
-
-    if 0 in portions_at_cutpoint_test.keys():
-        n_events_after_cut_test = portions_at_cutpoint_test[0] * df_test.shape[0]
-    else:
-        n_events_after_cut_test = 0
+        n_events_after_cut = 0
 
     return (
-        df_train,
-        df_test,
-        n_events_after_cut_train,
-        portion_censored_after_cut_train,
-        n_events_after_cut_test,
-        portion_censored_after_cut_test,
+        new_data,
+        n_events_after_cut,
+        portion_censored_after_cut,
+
     )
 
 
