@@ -1,0 +1,2 @@
+- wie die negative varianzen behandeln ?  --> aktuell nur die einbeziehen, die grösser 0 sind 
+                                          --> alternativ die varianzen kleiner 0 gleich null setzen 
