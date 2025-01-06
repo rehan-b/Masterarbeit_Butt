@@ -1,0 +1,36 @@
+### Data Stats ###
+seen events in train after cut: 0.2 %
+zero weights proportion: 0.1 %
+
+### Prediction Results ###
+WB_pred_S rel_bias : 0.04 %
+RF_pred_S rel_bias : 0.24 %
+
+### VAR Results - variante 1 ###
+ijk_wager rel_bias :  -100.00 %
+ijk_butt rel_bias :   -100.00 %
+ijk2_butt rel_bias :  -100.00 %
+boot rel_bias :       -100.00 %
+
+
+### VAR Results - variante 2 ###
+ijk_wager rel_bias :  -100.00 %
+ijk_butt rel_bias :   -100.00 %
+ijk2_butt rel_bias :  -100.00 %
+boot rel_bias :       -100.00 %
+
+
+### Simulation Parameters: ###
+Number of Simulations: 1000
+Train (2000) //  Test  (857)
+
+Data Creation Parameters:
+{'shape_weibull': 1, 'p_1': -0.405, 'p_2': -0.4, 'p_3': -0.05, 'p_4': -0.01, 'n': 2858, 'scale_weibull_base': 22080, 'rate_censoring': 0.00321, 'tau': 37, 'data_type': 'weibull'}
+cut-off time tau: 37
+
+Random Forest Parameter:
+{'n_estimators': 1000, 'max_depth': 4, 'min_samples_split': 5, 'max_features': 'log2', 'random_state': 42, 'weighted_bootstrapping': True}
+the above seeds (42) are start_seed for the simulation function
+
+### Variance Estimate parameters: ###
+B_1 for Bootstrap var estimate (B_1): 0
