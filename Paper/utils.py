@@ -536,7 +536,7 @@ def save_results(n,n_covariates, B_RF, boot_calc, seed, results1, results3, resu
     
     # create directory to save results
     n_sim = results1.shape[0]
-    exp_name = f'(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){boot_calc[1]}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates_higherS(tau)'
+    exp_name = f'(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){boot_calc[1]}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates_lowS(tau)'
     path = os.path.abspath('')
     if not os.path.exists(path + '/results/'+exp_name):
         os.makedirs(path + '/results/'+exp_name)
