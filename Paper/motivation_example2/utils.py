@@ -128,14 +128,18 @@ def simulate_bagging_and_variance(
     boot_weights: np.ndarray = None,
     ij_variance_calc: bool = True,
     ij_w_variance_calc: bool = False,
+    fixed_x: bool = False,
 ):
     
     # Seed adjustment
     adjusted_seed = seed + simulation_index
     rng = np.random.default_rng(adjusted_seed)
 
-    # Generate data
-    x_train = rng.uniform(0, 1, n)
+    # Generate data 
+    if fixed_x:
+        x_train = np.linspace(0, 1, n) 
+    else:
+        x_train = rng.uniform(0, 1, n)
     y_train = generate_response(x_train = x_train, seed=adjusted_seed)
 
 
