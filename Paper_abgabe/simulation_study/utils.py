@@ -694,7 +694,7 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     plt.axhline(y=0, color='red', linestyle='--')
     plt.grid(True)
     plt.xticks(weights_zero)
-    plt.xlabel(r'$p_{w_0} = \frac{|\{w_i = 0\}|}{|\{w_i\}|}$')
+    plt.xlabel(r'$p_{w_0}$')
     plt.ylabel("RB (in %)")
     plt.legend(title='Estimator', loc='upper left')
     plt.ylim(y1, y2)
