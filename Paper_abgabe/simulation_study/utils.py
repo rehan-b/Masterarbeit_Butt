@@ -699,4 +699,4 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     plt.legend(title='Estimator', loc='upper left')
     plt.ylim(y1, y2)
 
-    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.png', bbox_inches='tight')
+    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.png', bbox_inches='tight',dpi = 300)
