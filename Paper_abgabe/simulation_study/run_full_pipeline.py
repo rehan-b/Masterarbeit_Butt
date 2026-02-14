@@ -37,6 +37,8 @@ def build_data_params(n: int, tau: float, x_pred: pd.DataFrame):
 
 def main():
     parser = argparse.ArgumentParser(description="Run simulation + generate all plots automatically.")
+    parser.add_argument("--mode", choices=["simulate", "plots-only"], default="simulate")
+    parser.add_argument("--results-path", type=str, default=None, help="Existing result folder for plots-only mode")
     parser.add_argument("--n-sim", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n", type=int, default=1429)
@@ -44,6 +46,13 @@ def main():
     parser.add_argument("--b-1", type=int, default=200)
     parser.add_argument("--n-jobs", type=int, default=-1, help="-1 uses all available CPU cores")
     args = parser.parse_args()
+
+    if args.mode == "plots-only":
+        if args.results_path is None:
+            raise ValueError("For --mode plots-only you must provide --results-path")
+        create_all_plots(args.results_path)
+        print(f"Plots generated for existing folder: {os.path.abspath(args.results_path)}")
+        return
 
     x_pred = pd.DataFrame([[0, 1, 80, 40]], columns=["X_1", "X_2", "X_3", "X_4"])
     data1, data3, data5 = build_data_params(n=args.n, tau=37, x_pred=x_pred)

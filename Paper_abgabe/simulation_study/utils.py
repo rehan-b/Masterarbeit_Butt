@@ -7,7 +7,7 @@ from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 import os, json
 import matplotlib.pyplot as plt
 import warnings
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 #########################################################################################################
 ' Variance Estmators '
@@ -878,6 +878,18 @@ def _simulation_task(task):
     )
     return key, result
 
+
+def _print_progress(done: int, total: int, bar_len: int = 32):
+    """Print a simple in-place console progress bar."""
+    if total <= 0:
+        return
+    frac = done / total
+    filled = int(bar_len * frac)
+    bar = "#" * filled + "-" * (bar_len - filled)
+    print(f"\rSimulation progress: [{bar}] {done}/{total} ({frac * 100:5.1f}%)", end="", flush=True)
+    if done == total:
+        print()
+
 def run_simulation_and_save(
     n_sim: int,
     seed: int,
@@ -909,15 +921,25 @@ def run_simulation_and_save(
             tasks.append((key, i, seed, data_params, params_rf, B_1))
 
     results_rows = {"1": [], "3": [], "5": []}
+    total_tasks = len(tasks)
+    done_tasks = 0
+    _print_progress(done_tasks, total_tasks)
+
     if max_workers == 1:
         for task in tasks:
             key, row = _simulation_task(task)
             results_rows[key].append(row)
+            done_tasks += 1
+            _print_progress(done_tasks, total_tasks)
     else:
         chunksize = max(1, len(tasks) // (max_workers * 4))
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for key, row in executor.map(_simulation_task, tasks, chunksize=chunksize):
+            futures = [executor.submit(_simulation_task, task) for task in tasks]
+            for future in as_completed(futures):
+                key, row = future.result()
                 results_rows[key].append(row)
+                done_tasks += 1
+                _print_progress(done_tasks, total_tasks)
 
     results = {key: pd.DataFrame(rows) for key, rows in results_rows.items()}
 
