@@ -7,6 +7,7 @@ from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 import os, json
 import matplotlib.pyplot as plt
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 
 #########################################################################################################
 ' Variance Estmators '
@@ -863,6 +864,20 @@ def simulation_core(
     }
 
 
+
+
+def _simulation_task(task):
+    """Top-level worker helper for multiprocessing."""
+    key, sim_index, seed, data_params, params_rf, b1 = task
+    result = simulation_core(
+        seed=seed + sim_index,
+        data_generation_parameter=data_params,
+        params_rf=params_rf,
+        train_models=True,
+        boot_B1=b1,
+    )
+    return key, result
+
 def run_simulation_and_save(
     n_sim: int,
     seed: int,
@@ -874,28 +889,37 @@ def run_simulation_and_save(
     data_generation_parameter_3: dict,
     data_generation_parameter_5: dict,
     params_rf: dict,
+    n_jobs: int = -1,
 ):
     """Run all three zero-weight scenarios and save results in one folder."""
-    results = {}
     scenario_map = {
         "1": data_generation_parameter_1,
         "3": data_generation_parameter_3,
         "5": data_generation_parameter_5,
     }
 
+    if n_jobs in (None, -1):
+        max_workers = os.cpu_count() or 1
+    else:
+        max_workers = max(1, int(n_jobs))
+
+    tasks = []
     for key, data_params in scenario_map.items():
-        run_rows = []
         for i in range(n_sim):
-            run_rows.append(
-                simulation_core(
-                    seed=seed + i,
-                    data_generation_parameter=data_params,
-                    params_rf=params_rf,
-                    train_models=True,
-                    boot_B1=B_1,
-                )
-            )
-        results[key] = pd.DataFrame(run_rows)
+            tasks.append((key, i, seed, data_params, params_rf, B_1))
+
+    results_rows = {"1": [], "3": [], "5": []}
+    if max_workers == 1:
+        for task in tasks:
+            key, row = _simulation_task(task)
+            results_rows[key].append(row)
+    else:
+        chunksize = max(1, len(tasks) // (max_workers * 4))
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            for key, row in executor.map(_simulation_task, tasks, chunksize=chunksize):
+                results_rows[key].append(row)
+
+    results = {key: pd.DataFrame(rows) for key, rows in results_rows.items()}
 
     exp_name = f"(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){B_1}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates"
     base_dir = os.path.join(os.path.abspath(""), "results", exp_name)
