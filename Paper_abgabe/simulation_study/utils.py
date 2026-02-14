@@ -1026,8 +1026,14 @@ def _load_results_by_setting(exp_save_path: str):
 
 
 
-def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
-    """Execute corr_plots.ipynb and RB_est_var.ipynb in-process (no jupyter binary needed)."""
+def create_plots_from_notebooks(
+    exp_save_path: str,
+    patient: str = "averageS",
+    corr_xlims=None,
+    strip_xlim=None,
+    rb_xlim=None,
+):
+    """Execute plot notebooks in-process and pass optional x-axis limits via environment."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     notebooks = [
         "corr_plots.ipynb",
@@ -1038,6 +1044,19 @@ def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
     target_path = os.path.abspath(exp_save_path)
     os.environ["EXP_SAVE_PATH"] = target_path
     os.environ["PATIENT_LABEL"] = patient
+
+    if corr_xlims is not None:
+        if len(corr_xlims) != 3:
+            raise ValueError("corr_xlims must contain exactly 3 (min,max) tuples")
+        os.environ["CORR_XLIM_1"] = f"{float(corr_xlims[0][0])},{float(corr_xlims[0][1])}"
+        os.environ["CORR_XLIM_3"] = f"{float(corr_xlims[1][0])},{float(corr_xlims[1][1])}"
+        os.environ["CORR_XLIM_5"] = f"{float(corr_xlims[2][0])},{float(corr_xlims[2][1])}"
+
+    if strip_xlim is not None:
+        os.environ["STRIP_XLIM"] = f"{float(strip_xlim[0])},{float(strip_xlim[1])}"
+
+    if rb_xlim is not None:
+        os.environ["RB_XLIM"] = f"{float(rb_xlim[0])},{float(rb_xlim[1])}"
 
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
     if existing_pythonpath:

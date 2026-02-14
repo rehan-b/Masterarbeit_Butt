@@ -46,12 +46,29 @@ def main():
     parser.add_argument("--b-1", type=int, default=200)
     parser.add_argument("--n-jobs", type=int, default=-1, help="-1 uses all available CPU cores")
     parser.add_argument("--patient-label", type=str, default="averageS")
+    parser.add_argument("--corr-xlim-1", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--corr-xlim-3", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--corr-xlim-5", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--strip-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--rb-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     args = parser.parse_args()
+
+    corr_xlims = None
+    if args.corr_xlim_1 or args.corr_xlim_3 or args.corr_xlim_5:
+        if not (args.corr_xlim_1 and args.corr_xlim_3 and args.corr_xlim_5):
+            raise ValueError("If you set corr x-limits, provide all three: --corr-xlim-1/3/5")
+        corr_xlims = [tuple(args.corr_xlim_1), tuple(args.corr_xlim_3), tuple(args.corr_xlim_5)]
 
     if args.mode == "plots-only":
         if args.results_path is None:
             raise ValueError("For --mode plots-only you must provide --results-path")
-        create_plots_from_notebooks(args.results_path, patient=args.patient_label)
+        create_plots_from_notebooks(
+            args.results_path,
+            patient=args.patient_label,
+            corr_xlims=corr_xlims,
+            strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
+            rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
+        )
         print(f"Notebook plots generated for existing folder: {os.path.abspath(args.results_path)}")
         return
 
@@ -81,7 +98,13 @@ def main():
         n_jobs=args.n_jobs,
     )
 
-    create_plots_from_notebooks(save_path, patient=args.patient_label)
+    create_plots_from_notebooks(
+        save_path,
+        patient=args.patient_label,
+        corr_xlims=corr_xlims,
+        strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
+        rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
+    )
     print(f"Simulation and plots completed. Output folder: {os.path.abspath(save_path)}")
 
 
