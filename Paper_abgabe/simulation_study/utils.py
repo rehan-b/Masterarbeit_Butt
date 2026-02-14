@@ -5,6 +5,7 @@ from sksurv.util import Surv
 from sklearn.model_selection import train_test_split
 from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 import os, json
+import subprocess
 import matplotlib.pyplot as plt
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -1023,6 +1024,35 @@ def _load_results_by_setting(exp_save_path: str):
     results5 = pd.read_csv(exp_save_path + f"/results5__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][2]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][2]}.csv")
     return exp_settings, results1, results3, results5
 
+
+
+
+def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
+    """Execute corr_plots.ipynb and RB_est_var.ipynb using EXP_SAVE_PATH from CLI."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    notebooks = [
+        "corr_plots.ipynb",
+        "RB_est_var.ipynb",
+    ]
+
+    env = os.environ.copy()
+    env["EXP_SAVE_PATH"] = os.path.abspath(exp_save_path)
+    env["PATIENT_LABEL"] = patient
+
+    for nb in notebooks:
+        nb_path = os.path.join(base_dir, nb)
+        cmd = [
+            "jupyter",
+            "nbconvert",
+            "--to",
+            "notebook",
+            "--execute",
+            "--inplace",
+            nb_path,
+        ]
+        subprocess.run(cmd, cwd=base_dir, env=env, check=True)
+
+    return {"notebooks_executed": notebooks, "exp_save_path": os.path.abspath(exp_save_path)}
 
 def create_all_plots(exp_save_path: str):
     """Generate all core + additional plots for one experiment folder."""

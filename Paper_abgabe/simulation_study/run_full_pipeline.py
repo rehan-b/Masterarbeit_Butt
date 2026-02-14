@@ -2,7 +2,7 @@ import argparse
 import os
 import pandas as pd
 
-from utils import run_simulation_and_save, create_all_plots
+from utils import run_simulation_and_save, create_plots_from_notebooks
 
 
 def build_data_params(n: int, tau: float, x_pred: pd.DataFrame):
@@ -45,13 +45,14 @@ def main():
     parser.add_argument("--b-rf", type=int, default=1000)
     parser.add_argument("--b-1", type=int, default=200)
     parser.add_argument("--n-jobs", type=int, default=-1, help="-1 uses all available CPU cores")
+    parser.add_argument("--patient-label", type=str, default="averageS")
     args = parser.parse_args()
 
     if args.mode == "plots-only":
         if args.results_path is None:
             raise ValueError("For --mode plots-only you must provide --results-path")
-        create_all_plots(args.results_path)
-        print(f"Plots generated for existing folder: {os.path.abspath(args.results_path)}")
+        create_plots_from_notebooks(args.results_path, patient=args.patient_label)
+        print(f"Notebook plots generated for existing folder: {os.path.abspath(args.results_path)}")
         return
 
     x_pred = pd.DataFrame([[0, 1, 80, 40]], columns=["X_1", "X_2", "X_3", "X_4"])
@@ -80,7 +81,7 @@ def main():
         n_jobs=args.n_jobs,
     )
 
-    create_all_plots(save_path)
+    create_plots_from_notebooks(save_path, patient=args.patient_label)
     print(f"Simulation and plots completed. Output folder: {os.path.abspath(save_path)}")
 
 
