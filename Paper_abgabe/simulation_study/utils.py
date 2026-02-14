@@ -5,7 +5,6 @@ from sksurv.util import Surv
 from sklearn.model_selection import train_test_split
 from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 import os, json
-import subprocess
 import matplotlib.pyplot as plt
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -1028,31 +1027,38 @@ def _load_results_by_setting(exp_save_path: str):
 
 
 def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
-    """Execute corr_plots.ipynb and RB_est_var.ipynb using EXP_SAVE_PATH from CLI."""
+    """Execute corr_plots.ipynb and RB_est_var.ipynb in-process (no jupyter binary needed)."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     notebooks = [
         "corr_plots.ipynb",
         "RB_est_var.ipynb",
     ]
 
-    env = os.environ.copy()
-    env["EXP_SAVE_PATH"] = os.path.abspath(exp_save_path)
-    env["PATIENT_LABEL"] = patient
+    target_path = os.path.abspath(exp_save_path)
+    os.environ["EXP_SAVE_PATH"] = target_path
+    os.environ["PATIENT_LABEL"] = patient
+
+    try:
+        import nbformat
+        from nbclient import NotebookClient
+    except ImportError as exc:
+        raise RuntimeError(
+            "Notebook execution requires Python packages 'nbformat' and 'nbclient'. "
+            "Install them in your environment (e.g. pip install nbformat nbclient)."
+        ) from exc
 
     for nb in notebooks:
         nb_path = os.path.join(base_dir, nb)
-        cmd = [
-            "jupyter",
-            "nbconvert",
-            "--to",
-            "notebook",
-            "--execute",
-            "--inplace",
-            nb_path,
-        ]
-        subprocess.run(cmd, cwd=base_dir, env=env, check=True)
+        with open(nb_path, "r", encoding="utf-8") as f:
+            notebook = nbformat.read(f, as_version=4)
 
-    return {"notebooks_executed": notebooks, "exp_save_path": os.path.abspath(exp_save_path)}
+        client = NotebookClient(notebook, timeout=1200, kernel_name="python3")
+        client.execute(cwd=base_dir)
+
+        with open(nb_path, "w", encoding="utf-8") as f:
+            nbformat.write(notebook, f)
+
+    return {"notebooks_executed": notebooks, "exp_save_path": target_path}
 
 def create_all_plots(exp_save_path: str):
     """Generate all core + additional plots for one experiment folder."""
