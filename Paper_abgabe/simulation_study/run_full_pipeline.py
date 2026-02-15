@@ -74,7 +74,14 @@ def main():
     parser.add_argument("--var-xlim-1", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--var-xlim-3", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--var-xlim-5", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
-    parser.add_argument("--rb-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument(
+        "--rb-xlim",
+        nargs=2,
+        type=float,
+        metavar=("MIN", "MAX"),
+        default=[-60.0, 100.0],
+        help="x-axis limits for RB plot (default: -60 100)",
+    )
     args = parser.parse_args()
 
     corr_xlims = None
@@ -98,7 +105,7 @@ def main():
             corr_xlims=corr_xlims,
             strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
             var_xlims=var_xlims,
-            rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
+            rb_xlim=tuple(args.rb_xlim),
         )
         print(f"Notebook plots generated for existing folder: {os.path.abspath(args.results_path)}")
         return
@@ -135,7 +142,7 @@ def main():
         corr_xlims=corr_xlims,
         strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
         var_xlims=var_xlims,
-        rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
+        rb_xlim=tuple(args.rb_xlim),
     )
     print(f"Simulation and plots completed. Output folder: {os.path.abspath(save_path)}")
 
