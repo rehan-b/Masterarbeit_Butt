@@ -215,13 +215,13 @@ def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
             }
         )
 
-    elif params['X_pred_point'].shape[1] == 4:   
+    elif params['X_pred_point'].shape[1] == 4:
         (shape_weibull, scale_weibull_base, rate_censoring, n, p_1, p_2, p_3,p_4) = (
             params["shape_weibull"],
             params["scale_weibull_base"],
             params["rate_censoring"],
             params["n"],
-            params["p_1"], 
+            params["p_1"],
             params["p_2"],
             params["p_3"],
             params["p_4"],)
@@ -230,16 +230,22 @@ def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
         rng = np.random.default_rng(random_state)
         X_1 = rng.binomial(1, 0.3, n)
         X_2 = rng.binomial(1, 0.8, n)
-        X_3 = rng.normal(80, 10, n)  
-        X_4 = rng.normal(40, 5, n)  
+
+        covariate_type = params.get("covariate_type", "original")
+        if covariate_type == "binary":
+            X_3 = rng.binomial(1, 0.9, n)
+            X_4 = rng.binomial(1, 0.4, n)
+        else:
+            X_3 = rng.normal(80, 10, n)
+            X_4 = rng.normal(40, 5, n)
 
 
         # Lambda Weibull
         lambda_weibull = scale_weibull_base * np.exp(
                 p_1 * X_1
-            + p_2 * X_2  
-            + p_3 * X_3 
-            + p_4 * X_4 
+            + p_2 * X_2
+            + p_3 * X_3
+            + p_4 * X_4
         )
 
         # Ereigniszeiten und Zensierzeiten
@@ -249,16 +255,28 @@ def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
         event_occurred = event_times <= censoring_times
 
         # Erstellung des Datensatzes
-        data = pd.DataFrame(
-            {
-                "X_1": X_1.astype(int),
-                "X_2": X_2.astype(int),
-                "X_3": X_3,
-                "X_4": X_4,
-                "time": observed_times,
-                "event": event_occurred.astype(int),
-            }
-        )
+        if covariate_type == "binary":
+            data = pd.DataFrame(
+                {
+                    "X_1": X_1.astype(int),
+                    "X_2": X_2.astype(int),
+                    "X_3": X_3.astype(int),
+                    "X_4": X_4.astype(int),
+                    "time": observed_times,
+                    "event": event_occurred.astype(int),
+                }
+            )
+        else:
+            data = pd.DataFrame(
+                {
+                    "X_1": X_1.astype(int),
+                    "X_2": X_2.astype(int),
+                    "X_3": X_3,
+                    "X_4": X_4,
+                    "time": observed_times,
+                    "event": event_occurred.astype(int),
+                }
+            )
 
     return data 
 
@@ -652,11 +670,18 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     true_std_5 = results5['rf_pred'].std(ddof=1)
 
     # Bias and Error of the Standard Deviation Estimates (ohne u2 Schätzer)
-    exclude_keys = ['ijk_butt_var',  'ijk_u_butt_var',  'ijk_u2_butt_var',
-                    'ijk_jahn_var',  'ijk_u2_jahn_var', 'jk_wager_var',
-                    ]
-    columns = [col for col in results1.columns[9:] if not any(key in col for key in exclude_keys)]
-    columns.remove('jk_u_wager_var')
+    # New pipeline format (simulation_core) has named variance columns directly.
+    # Old format used index-based selection starting at column 9.
+    preferred = ['ijk_u_jahn_var', 'ijk_u_wager_var', 'boot_var']
+    if all(c in results1.columns for c in preferred):
+        columns = preferred
+    else:
+        exclude_keys = ['ijk_butt_var',  'ijk_u_butt_var',  'ijk_u2_butt_var',
+                        'ijk_jahn_var',  'ijk_u2_jahn_var', 'jk_wager_var',
+                        ]
+        columns = [col for col in results1.columns[9:] if not any(key in col for key in exclude_keys)]
+        if 'jk_u_wager_var' in columns:
+            columns.remove('jk_u_wager_var')
 
     def calc_bias_and_error(results, true_std, columns):
         bias = [(np.mean(results[col].apply(lambda x: np.sqrt(x) if x >= 0 else 0)) - true_std) / true_std * 100 for col in columns]
@@ -902,6 +927,8 @@ def run_simulation_and_save(
     data_generation_parameter_5: dict,
     params_rf: dict,
     n_jobs: int = -1,
+    results_subdir: str = "results",
+    exp_name_suffix: str = "",
 ):
     """Run all three zero-weight scenarios and save results in one folder."""
     scenario_map = {
@@ -943,8 +970,8 @@ def run_simulation_and_save(
 
     results = {key: pd.DataFrame(rows) for key, rows in results_rows.items()}
 
-    exp_name = f"(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){B_1}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates"
-    base_dir = os.path.join(os.path.abspath(""), "results", exp_name)
+    exp_name = f"(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){B_1}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates{exp_name_suffix}"
+    base_dir = os.path.join(os.path.abspath(""), results_subdir, exp_name)
     os.makedirs(base_dir, exist_ok=True)
 
     suffix = (
@@ -953,7 +980,7 @@ def run_simulation_and_save(
         + results["5"]["portion_zero_weights_train"].mean()
         + np.sum(data_generation_parameter_1["X_pred_point"].values[0])
     )
-    save_path = os.path.join(base_dir, str(suffix))
+    save_path = os.path.join(base_dir, str(suffix.round(4)))
     os.makedirs(save_path, exist_ok=True)
 
     for key in ["1", "3", "5"]:
